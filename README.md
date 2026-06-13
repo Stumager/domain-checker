@@ -1,4 +1,4 @@
-# DNS Checker
+# Domain Checker
 
 A local desktop tool for bulk domain availability checking with DNS prefiltering,
 RDAP verification, and Wayback Machine history analysis.
@@ -27,20 +27,19 @@ The app opens automatically in your browser and shuts down when the tab is close
 
 ## Screenshot
 
-![DNS Checker UI](docs/screenshot.png)
-
-> Add a screenshot to `docs/screenshot.png` to replace this placeholder.
+![Domain Checker UI](<Снимок экрана 2026-06-13 201041.png>)
+![Web archive UI](<Снимок экрана 2026-06-13 201525.png>)
 
 ## Tech stack
 
-| Layer | Technology |
-|-------|------------|
-| Backend | Python 3.10+, Flask 2.3 |
-| DNS resolution | dnspython 2.4 |
-| HTTP / RDAP / WHOIS | requests, socket |
-| Concurrency | threading, ThreadPoolExecutor |
-| Archive | Wayback Machine CDX API |
-| Frontend | Vanilla JS, CSS (no frameworks) |
+| Layer               | Technology                      |
+| ------------------- | ------------------------------- |
+| Backend             | Python 3.10+, Flask 2.3         |
+| DNS resolution      | dnspython 2.4                   |
+| HTTP / RDAP / WHOIS | requests, socket                |
+| Concurrency         | threading, ThreadPoolExecutor   |
+| Archive             | Wayback Machine CDX API         |
+| Frontend            | Vanilla JS, CSS (no frameworks) |
 
 ## Requirements
 
@@ -68,13 +67,13 @@ Copy `.env.example` to `.env` and adjust as needed:
 cp backend/.env.example backend/.env
 ```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8080` | Local server port |
-| `DEFAULT_TLDS` | `es it pl fr de pt nl …` | TLDs used for label expansion |
-| `FINAL_CHECK_ENABLED` | `1` | Enable RDAP second-pass check |
-| `ARCHIVE_REPUTATION_SAFE_BROWSING_KEY` | *(empty)* | Google Safe Browsing API key (optional) |
-| `ARCHIVE_CLOAK_CHECK_ENABLED` | `0` | Enable cloaking detection (makes live requests) |
+| Variable                               | Default                  | Description                                     |
+| -------------------------------------- | ------------------------ | ----------------------------------------------- |
+| `PORT`                                 | `8080`                   | Local server port                               |
+| `DEFAULT_TLDS`                         | `es it pl fr de pt nl …` | TLDs used for label expansion                   |
+| `FINAL_CHECK_ENABLED`                  | `1`                      | Enable RDAP second-pass check                   |
+| `ARCHIVE_REPUTATION_SAFE_BROWSING_KEY` | _(empty)_                | Google Safe Browsing API key (optional)         |
+| `ARCHIVE_CLOAK_CHECK_ENABLED`          | `0`                      | Enable cloaking detection (makes live requests) |
 
 See `.env.example` for the full list of options.
 
