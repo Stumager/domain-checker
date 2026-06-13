@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS CHECKER</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>⚡ DNS CHECKER</h1>
+            <p>DNS prefilter (NS/SOA) • RDAP final verify</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Info Box -->
+            <div class="info">
+                ℹ️ Labels (lines without dot) are automatically multiplied by a default TLD list configured on the server.
+            </div>
+
+            <!-- Input Form -->
+            <div class="form-group">
+                <label>Domains / Labels (<span id="domainCount">0</span>)</label>
+                <textarea id="domainsInput" placeholder="example.es&#10;test.com&#10;brand (label)"></textarea>
+                <div id="dropHint" class="drop-hint" title="Click to choose files">
+                    Drag &amp; drop CSV/TXT files here or click to choose
+                </div>
+                <input id="domainsFileInput" type="file" accept=".csv,.txt,text/plain" multiple hidden>
+                <div class="tld-filter-row">
+                    <input id="extraTldsInput" type="text" placeholder=".gov, .org">
+                    <button id="filterBtn" type="button" class="btn-primary">Очистить TLD</button>
+                </div>
+                <div class="input-hint">Optional: keep multi-level domains only when each extra TLD is listed above.</div>
+            </div>
+
+            <!-- Settings -->
+            <div class="settings">
+                <div class="row">
+                    <div class="form-group">
+                        <label>Threads</label>
+                        <input type="number" id="threadsInput" value="32" min="1" max="128">
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="rdapErrorsToggle" checked>
+                            <label for="rdapErrorsToggle">RDAP recheck for Errors</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="buttons">
+                <button class="btn-primary" id="startBtn" onclick="startCheck()">Start Check</button>
+                <button class="btn-primary" id="stopBtn" onclick="stopCheck()" 
+                        style="display: none; background: #ef4444;">Stop</button>
+                <button class="btn-archive" onclick="toggleArchiveModal()">Web Archive 🏛️</button>
+            </div>
+
+            <!-- Progress Section -->
+            <div class="progress-section" id="progressSection">
+                <div class="current-domain" id="currentDomain"></div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
+                <div class="stats">
+                    <div class="stat-box available">
+                        <div class="stat-label">Available</div>
+                        <div class="stat-value" id="availableStat">0</div>
+                    </div>
+                    <div class="stat-box taken">
+                        <div class="stat-label">Taken</div>
+                        <div class="stat-value" id="takenStat">0</div>
+                    </div>
+                    <div class="stat-box invalid">
+                        <div class="stat-label">Invalid</div>
+                        <div class="stat-value" id="invalidStat">0</div>
+                    </div>
+                    <div class="stat-box errors">
+                        <div class="stat-label">Errors</div>
+                        <div class="stat-value" id="errorsStat">0</div>
+                    </div>
+                </div>
+                <div id="statusMsg"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection">
+                <div class="results-grid">
+                    <!-- placeholder for RDAP error summary (populated by JS) -->
+                    <div id="rdapErrorInfo" style="width:100%; text-align:center; color:#f59e0b; margin-bottom:10px;"></div>
+                    <div class="result-card available">
+                        <h3>Available</h3>
+                        <div class="result-count" id="resultAvailable">0</div>
+                        <button class="download-btn" onclick="downloadResult('available')">📥 Download</button>
+                    </div>
+                    <div class="result-card taken">
+                        <h3>Taken</h3>
+                        <div class="result-count" id="resultTaken">0</div>
+                        <button class="download-btn" onclick="downloadResult('taken')">📥 Download</button>
+                    </div>
+                    <div class="result-card invalid">
+                        <h3>Invalid</h3>
+                        <div class="result-count" id="resultInvalid">0</div>
+                        <button class="download-btn" onclick="downloadResult('invalid')">📥 Download</button>
+                    </div>
+                    <div class="result-card errors">
+                        <h3>Errors</h3>
+                        <div class="result-count" id="resultErrors">0</div>
+                        <button class="download-btn" onclick="downloadResult('errors')">📥 Download</button>
+                    </div>
+                </div>
+                <div style="text-align:center; margin-top:20px;">
+                    <button class="btn-primary" onclick="downloadAllResults()" style="max-width:400px;">📦 Download All (ZIP)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Archive Modal -->
+    <div class="modal-overlay" id="archiveModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Domain History</h2>
+                <button onclick="toggleArchiveModal()">Close</button>
+            </div>
+            <div class="archive-search">
+                <input type="text" id="archiveSearchInput" placeholder="Enter domain..." 
+                       onkeypress="handleArchiveKeyPress(event)">
+                <input type="text" id="archiveProxyInput" placeholder="Proxy (optional): ip:port or http://user:pass@ip:port" 
+                       onkeypress="handleArchiveKeyPress(event)">
+                <button onclick="fetchWaybackData()">Search</button>
+            </div>
+            <div class="archive-meta">
+                <span id="archiveRangeInfo">Range: 1998-2026</span>
+                <span id="archiveProxyInfo">Proxy: Direct connection</span>
+                <span id="archiveTotalInfo">Total snapshots: 0</span>
+                <span id="archiveRedirectInfo"></span>
+                <span id="archiveRiskInfo"></span>
+            </div>
+            <div class="checkbox-row" style="margin-bottom: 12px;">
+                <input type="checkbox" id="archiveHideNaToggle" checked>
+                <label for="archiveHideNaToggle">Hide N/A rows</label>
+            </div>
+            <table class="archive-table">
+                <thead>
+                    <tr>
+                        <th>Date (UTC)</th>
+                        <th>Code</th>
+                        <th>Link</th>
+                        <th>Redirect / Spam / Topic</th>
+                    </tr>
+                </thead>
+                <tbody id="archiveTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

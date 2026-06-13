@@ -1,0 +1,66 @@
+# Python virtual environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Flask
+instance/
+.webassets-cache
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+*.txt
+!requirements.txt
+!README.txt
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Windows artifacts
+*.exe
+*.lnk
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Results (optional)
+available.txt
+taken.txt
+invalid.txt
+errors.txt
