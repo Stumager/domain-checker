@@ -7,6 +7,7 @@ class Config:
     """Base configuration"""
     
     # Flask settings
+    SECRET_KEY = os.getenv("SECRET_KEY", os.urandom(24).hex())
     DEBUG = os.getenv("DEBUG", "False") == "True"
     HOST = os.getenv("HOST", "127.0.0.1")
     PORT = int(os.getenv("PORT", "8080"))
@@ -119,7 +120,6 @@ class Config:
 
 class DevelopmentConfig(Config):
     """Development configuration"""
-    DEBUG = True
 
 
 class ProductionConfig(Config):

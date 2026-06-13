@@ -31,7 +31,7 @@
                 <input id="domainsFileInput" type="file" accept=".csv,.txt,text/plain" multiple hidden>
                 <div class="tld-filter-row">
                     <input id="extraTldsInput" type="text" placeholder=".gov, .org">
-                    <button id="filterBtn" type="button" class="btn-primary">Очистить TLD</button>
+                    <button id="filterBtn" type="button" class="btn-primary">Clear TLD</button>
                 </div>
                 <div class="input-hint">Optional: keep multi-level domains only when each extra TLD is listed above.</div>
             </div>
@@ -64,7 +64,8 @@
             <div class="progress-section" id="progressSection">
                 <div class="current-domain" id="currentDomain"></div>
                 <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill">0%</div>
+                    <div class="progress-fill" id="progressFill"></div>
+                    <span class="progress-label" id="progressLabel">0%</span>
                 </div>
                 <div class="stats">
                     <div class="stat-box available">
@@ -135,7 +136,7 @@
                 <button onclick="fetchWaybackData()">Search</button>
             </div>
             <div class="archive-meta">
-                <span id="archiveRangeInfo">Range: 1998-2026</span>
+                <span id="archiveRangeInfo">Range: —</span>
                 <span id="archiveProxyInfo">Proxy: Direct connection</span>
                 <span id="archiveTotalInfo">Total snapshots: 0</span>
                 <span id="archiveRedirectInfo"></span>

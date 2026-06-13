@@ -195,7 +195,7 @@ async function updateStatus() {
         document.getElementById("errorsStat").textContent = data.errors;
 
         // Update progress
-        document.getElementById("progressFill").textContent = data.progress_pct + "%";
+        document.getElementById("progressLabel").textContent = data.progress_pct + "%";
         document.getElementById("progressFill").style.width = data.progress_pct + "%";
         document.getElementById("currentDomain").textContent = "Current: " + (data.current_domain || "");
         // show main progress message and, if applicable, RDAP error count
@@ -440,6 +440,8 @@ function buildArchiveRowHtml(item) {
     const spamLabels = formatSpamLabels(item.spam);
     const spamHtml = spamLabels ? `<div class="archive-spam">SPAM: ${escapeHtml(spamLabels)}</div>` : "";
     const topicHtml = item.topic_shift ? `<div class="archive-topic">Смена тематики</div>` : "";
+    const languageHtml = item.language_shift ? `<div class="archive-topic">Смена языка</div>` : "";
+    const cloakingHtml = item.cloaking ? `<div class="archive-cloaking">Клоакинг</div>` : "";
     let redirectHtml = "";
     if (rawStatus === "301" || rawStatus === "302") {
         if (item.redirect) {
@@ -451,8 +453,8 @@ function buildArchiveRowHtml(item) {
             redirectHtml = `<div class="archive-redirect">${txt}</div>`;
         }
     }
-    if (redirectHtml || spamHtml || topicHtml) {
-        redirectCell = `<td class="archive-redirect-cell">${redirectHtml}${spamHtml}${topicHtml}</td>`;
+    if (redirectHtml || spamHtml || topicHtml || languageHtml || cloakingHtml) {
+        redirectCell = `<td class="archive-redirect-cell">${redirectHtml}${spamHtml}${topicHtml}${languageHtml}${cloakingHtml}</td>`;
     } else {
         redirectCell = `<td></td>`;
     }
@@ -927,6 +929,13 @@ window.addEventListener("DOMContentLoaded", () => {
     if (archiveHideNaToggle) {
         archiveHideNaToggle.addEventListener("change", () => {
             void applyArchiveFilters();
+        });
+    }
+
+    const archiveModal = document.getElementById("archiveModal");
+    if (archiveModal) {
+        archiveModal.addEventListener("click", (e) => {
+            if (e.target === archiveModal) toggleArchiveModal();
         });
     }
 

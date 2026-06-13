@@ -64,3 +64,9 @@ available.txt
 taken.txt
 invalid.txt
 errors.txt
+
+# Internal dev notes
+PROGRESS.md
+
+# Dead legacy folder
+frontend/
