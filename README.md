@@ -51,10 +51,9 @@ The app opens automatically in your browser and shuts down when the tab is close
 
 Run the app and capture screenshots, then place them in `docs/screenshots/`.
 
-![Main checker](docs/screenshots/checker.png)
-![Domain DB](docs/screenshots/domain_db.png)
-![Web Archive](docs/screenshots/archive.png)
-![Spam signals](docs/screenshots/spam.png)
+![Main checker](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20164557.png)
+![Web Archive](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20164632.png)
+![Domain DB](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20165042.png)
 
 ## Tech stack
 
