@@ -427,17 +427,17 @@ button:focus-visible {
     cursor: not-allowed;
 }
 
-/* Ghost style (previously .btn-indigo) */
 .btn-indigo {
-    background: transparent;
-    color: var(--t2);
-    border: 1px solid var(--br);
+    background: var(--ac-subtle);
+    color: var(--ach);
+    border: 1px solid rgba(99, 102, 241, 0.35);
     padding: 10px 20px;
 }
 
 .btn-indigo:hover {
-    border-color: var(--bra);
-    color: var(--t1);
+    background: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.6);
+    color: #c7d2fe;
 }
 
 /* Main action row */
@@ -902,9 +902,6 @@ button:focus-visible {
     word-break: break-word;
     font-size: 12px;
 }
-
-.archive-risk.ok  { color: var(--ok);  font-weight: 600; }
-.archive-risk.bad { color: var(--err); font-weight: 600; }
 
 /* ==============================================
    Domain DB — Layout

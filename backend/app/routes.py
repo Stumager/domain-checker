@@ -285,7 +285,7 @@ def get_archive_data():
         ) = _enrich_spam_flags(rows, headers, used_req_kwargs)
 
         topic_shifts, topic_checked, topic_shifted = _detect_topic_shifts(
-            rows, topic_sigs, topic_lengths)
+            rows, topic_sigs, topic_lengths, spam_hits)
         scripts_by_idx = {idx: m.get("script", "") for idx, m in (metrics_by_idx or {}).items()}
         language_shifts, language_checked, language_shifted = _detect_language_shifts(
             rows, scripts_by_idx, topic_lengths)

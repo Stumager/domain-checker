@@ -26,7 +26,7 @@ _SPAM_PATTERNS = {
         re.compile(r"\bporn\b", re.IGNORECASE),
         re.compile(r"\bporno\b", re.IGNORECASE),
         re.compile(r"\bxxx\b", re.IGNORECASE),
-        re.compile(r"\badult\b", re.IGNORECASE),
+        re.compile(r"\bxxx[-_]?\w*\b", re.IGNORECASE),
         re.compile(r"\bsex\b", re.IGNORECASE),
         re.compile(r"\bsexo\b", re.IGNORECASE),
         re.compile(r"\bsexe\b", re.IGNORECASE),
@@ -34,21 +34,22 @@ _SPAM_PATTERNS = {
         re.compile(r"\bpornograf\w*\b", re.IGNORECASE),
         re.compile(r"\berotik\b", re.IGNORECASE),
         re.compile(r"\bnackt\b", re.IGNORECASE),
-        re.compile(r"\bsexy\b", re.IGNORECASE),
         re.compile(r"\bnsfw\b", re.IGNORECASE),
         re.compile(r"\bnude\b", re.IGNORECASE),
         re.compile(r"\bnaked\b", re.IGNORECASE),
         re.compile(r"\berotic(a)?\b", re.IGNORECASE),
         re.compile(r"\bhardcore\b", re.IGNORECASE),
-        re.compile(r"\bteens?\b", re.IGNORECASE),
-        re.compile(r"\bvirgin\b", re.IGNORECASE),
         re.compile(r"\banal\b", re.IGNORECASE),
-        re.compile(r"\blesbian\b", re.IGNORECASE),
-        re.compile(r"\bgay\b", re.IGNORECASE),
         re.compile(r"\bmilf\b", re.IGNORECASE),
-        re.compile(r"\bwebcam\b", re.IGNORECASE),
         re.compile(r"\bcamgirls?\b", re.IGNORECASE),
-        re.compile(r"\bescort(s)?\b", re.IGNORECASE),
+        re.compile(r"\bonlyfans\b", re.IGNORECASE),
+        re.compile(r"\blive\s*sex\b", re.IGNORECASE),
+        re.compile(r"\bsex\s*chat\b", re.IGNORECASE),
+        re.compile(r"\bstrip\s*club\b", re.IGNORECASE),
+        re.compile(r"\b(hentai|futanari|doujin)\b", re.IGNORECASE),
+        re.compile(r"\bfetish\b", re.IGNORECASE),
+        re.compile(r"\bculos?\b", re.IGNORECASE),
+        re.compile(r"\bputas?\b", re.IGNORECASE),
         re.compile(r"интим", re.IGNORECASE),
         re.compile(r"голые", re.IGNORECASE),
         re.compile(r"порно", re.IGNORECASE),
@@ -57,8 +58,8 @@ _SPAM_PATTERNS = {
     ],
     "casino": [
         re.compile(r"\bcasino\b", re.IGNORECASE),
-        re.compile(r"\bslots?\b", re.IGNORECASE),
         re.compile(r"\bslot\s+machine(s)?\b", re.IGNORECASE),
+        re.compile(r"\b(free|online|real\s+money)\s+slots?\b", re.IGNORECASE),
         re.compile(r"\bjackpot\b", re.IGNORECASE),
         re.compile(r"\broulette\b", re.IGNORECASE),
         re.compile(r"\bblackjack\b", re.IGNORECASE),
@@ -67,29 +68,25 @@ _SPAM_PATTERNS = {
         re.compile(r"\bspielbank\b", re.IGNORECASE),
         re.compile(r"\bpoker\b", re.IGNORECASE),
         re.compile(r"\bbaccarat\b", re.IGNORECASE),
-        re.compile(r"\bbingo\b", re.IGNORECASE),
         re.compile(r"\bkeno\b", re.IGNORECASE),
         re.compile(r"\bcraps\b", re.IGNORECASE),
-        re.compile(r"\blottery\b", re.IGNORECASE),
+        re.compile(r"\bonline\s+casino\b", re.IGNORECASE),
+        re.compile(r"\bcasino\s+bonus\b", re.IGNORECASE),
+        re.compile(r"\bfree\s+spins\b", re.IGNORECASE),
+        re.compile(r"\bno\s+deposit\s+bonus\b", re.IGNORECASE),
+        re.compile(r"\blive\s+casino\b", re.IGNORECASE),
+        re.compile(r"\b(pragmatic|netent|microgaming|playtech)\b", re.IGNORECASE),
+        re.compile(r"\bgambling\b", re.IGNORECASE),
         re.compile(r"бинго", re.IGNORECASE),
         re.compile(r"джекпот", re.IGNORECASE),
         re.compile(r"казино", re.IGNORECASE),
         re.compile(r"слот", re.IGNORECASE),
         re.compile(r"рулетк", re.IGNORECASE),
         re.compile(r"покер", re.IGNORECASE),
+        re.compile(r"\bбонус\s+казино\b", re.IGNORECASE),
+        re.compile(r"\bбесплатные\s+вращени", re.IGNORECASE),
     ],
     "pharma": [
-        re.compile(r"\bpharma\b", re.IGNORECASE),
-        re.compile(r"\bpharmacy\b", re.IGNORECASE),
-        re.compile(r"\bfarmacia\b", re.IGNORECASE),
-        re.compile(r"\bpharmacie\b", re.IGNORECASE),
-        re.compile(r"\bapotheke\b", re.IGNORECASE),
-        re.compile(r"\bmedicamentos?\b", re.IGNORECASE),
-        re.compile(r"\bmedicina(s)?\b", re.IGNORECASE),
-        re.compile(r"\bremedios?\b", re.IGNORECASE),
-        re.compile(r"\bprescription\b", re.IGNORECASE),
-        re.compile(r"\brx\b", re.IGNORECASE),
-        re.compile(r"\bpills?\b", re.IGNORECASE),
         re.compile(r"\bviagra\b", re.IGNORECASE),
         re.compile(r"\bcialis\b", re.IGNORECASE),
         re.compile(r"\blevitra\b", re.IGNORECASE),
@@ -103,21 +100,27 @@ _SPAM_PATTERNS = {
         re.compile(r"\bphentermine\b", re.IGNORECASE),
         re.compile(r"\bprozac\b", re.IGNORECASE),
         re.compile(r"\bpaxil\b", re.IGNORECASE),
-        re.compile(r"\bmeridia\b", re.IGNORECASE),
         re.compile(r"\bultram\b", re.IGNORECASE),
-        re.compile(r"\bsoma\b", re.IGNORECASE),
         re.compile(r"\boxycodone\b", re.IGNORECASE),
         re.compile(r"\bhydrocodone\b", re.IGNORECASE),
         re.compile(r"\bbenzo\b", re.IGNORECASE),
-        re.compile(r"\bbuy\s+pills\b", re.IGNORECASE),
+        re.compile(r"\bcheap\s+(viagra|cialis|pills|meds|drugs)\b", re.IGNORECASE),
+        re.compile(r"\bbuy\s+(viagra|cialis|tramadol|xanax|pills|meds)\b", re.IGNORECASE),
+        re.compile(r"\border\s+(viagra|cialis|pills)\s+online\b", re.IGNORECASE),
+        re.compile(r"\bno\s+prescription\s+needed\b", re.IGNORECASE),
+        re.compile(r"\bwithout\s+prescription\b", re.IGNORECASE),
+        re.compile(r"\bpills?\s+online\b", re.IGNORECASE),
+        re.compile(r"\bgeneric\s+(viagra|cialis|levitra|drugs)\b", re.IGNORECASE),
+        re.compile(r"\bdrugs?\s+online\b", re.IGNORECASE),
         re.compile(r"фарма", re.IGNORECASE),
         re.compile(r"аптек", re.IGNORECASE),
         re.compile(r"таблет", re.IGNORECASE),
         re.compile(r"лекар", re.IGNORECASE),
+        re.compile(r"\bонлайн\s+аптек\b", re.IGNORECASE),
+        re.compile(r"\bкупить\s+(виагру|таблетки|лекарства)\b", re.IGNORECASE),
     ],
     "betting": [
         re.compile(r"\bbetting\b", re.IGNORECASE),
-        re.compile(r"\bbets?\b", re.IGNORECASE),
         re.compile(r"\bapuestas?\b", re.IGNORECASE),
         re.compile(r"\bapostas?\b", re.IGNORECASE),
         re.compile(r"\bscommess\w*\b", re.IGNORECASE),
@@ -125,27 +128,27 @@ _SPAM_PATTERNS = {
         re.compile(r"\bsportwetten\b", re.IGNORECASE),
         re.compile(r"\bwetten\b", re.IGNORECASE),
         re.compile(r"\bwager(s|ing)?\b", re.IGNORECASE),
-        re.compile(r"\bodds\b", re.IGNORECASE),
         re.compile(r"\bsportsbook\b", re.IGNORECASE),
         re.compile(r"\bsports?\s*betting\b", re.IGNORECASE),
         re.compile(r"\bbookmaker\b", re.IGNORECASE),
         re.compile(r"\bparlay\b", re.IGNORECASE),
+        re.compile(r"\bonline\s+betting\b", re.IGNORECASE),
+        re.compile(r"\bsports?\s+odds\b", re.IGNORECASE),
+        re.compile(r"\bbetting\s+tips?\b", re.IGNORECASE),
+        re.compile(r"\bfree\s+bets?\b", re.IGNORECASE),
+        re.compile(r"\b(1xbet|melbet|betway|bet365|betwinner)\b", re.IGNORECASE),
         re.compile(r"коэфф", re.IGNORECASE),
-        re.compile(r"экспресс", re.IGNORECASE),
         re.compile(r"ставк", re.IGNORECASE),
         re.compile(r"букмекер", re.IGNORECASE),
         re.compile(r"тотализатор", re.IGNORECASE),
+        re.compile(r"\bставки\s+на\s+спорт\b", re.IGNORECASE),
+        re.compile(r"\bпрогноз\s+матча\b", re.IGNORECASE),
     ],
     "doorway": [
-        re.compile(r"\bdoorway\b", re.IGNORECASE),
-        re.compile(r"\bdoorway\s+pages?\b", re.IGNORECASE),
-        re.compile(r"\bgateway\s+pages?\b", re.IGNORECASE),
-        re.compile(r"\bbridge\s+pages?\b", re.IGNORECASE),
-        re.compile(r"\bentry\s+pages?\b", re.IGNORECASE),
-        re.compile(r"\bjump\s+pages?\b", re.IGNORECASE),
-        re.compile(r"\blanding\s+pages?\b", re.IGNORECASE),
-        re.compile(r"дорвей", re.IGNORECASE),
-        re.compile(r"дорвеи", re.IGNORECASE),
+        # Primary detection is via _looks_like_doorway(); keywords here are supplemental.
+        re.compile(r"\bdoorway\s+page\b", re.IGNORECASE),
+        re.compile(r"\bдорвей\w*\b", re.IGNORECASE),
+        re.compile(r"\bдорвеи\b", re.IGNORECASE),
     ],
     "parked": [
         re.compile(r"\bthis\s+domain\s+is\s+for\s+sale\b", re.IGNORECASE),
@@ -196,6 +199,27 @@ _PARKED_BRANDS = [
     re.compile(r"\bflippa\b", re.IGNORECASE),
 ]
 
+_BROWSER_ERROR_PATTERNS = [
+    re.compile(r"this\s+site\s+can['’]t\s+be\s+reached", re.IGNORECASE),
+    re.compile(r"err_(?:name_not_resolved|connection_refused|timed_out|ssl)", re.IGNORECASE),
+    re.compile(r"dns_probe_finished", re.IGNORECASE),
+    re.compile(r"webpage\s+(?:is\s+not\s+available|not\s+found)", re.IGNORECASE),
+    re.compile(r"apache2?\s+(?:ubuntu\s+)?default\s+page", re.IGNORECASE),
+    re.compile(r"welcome\s+to\s+nginx", re.IGNORECASE),
+    re.compile(r"403\s+forbidden", re.IGNORECASE),
+    re.compile(r"server\s+not\s+found", re.IGNORECASE),
+    re.compile(r"index\s+of\s+/", re.IGNORECASE),
+    re.compile(r"it\s+works!\s*(?:this\s+is\s+the\s+default\s+web\s+page)", re.IGNORECASE),
+]
+
+
+def _is_browser_error_page(text: str) -> bool:
+    """Return True if this looks like a browser/server error or default page."""
+    if not text or len(text) > 2000:
+        return False
+    return any(p.search(text) for p in _BROWSER_ERROR_PATTERNS)
+
+
 _CHINESE_SPAM_TERMS = [
     re.compile(r"微信", re.IGNORECASE),
     re.compile(r"厂家", re.IGNORECASE),
@@ -214,9 +238,9 @@ _CHINESE_SPAM_TERMS = [
     re.compile(r"采购", re.IGNORECASE),
     re.compile(r"样品", re.IGNORECASE),
     re.compile(
-        r"\b(wholesale|manufacturer|supplier|factory|oem|odm|moq|rfq|quotation|quote"
-        r"|inquiry|price|wechat|whatsapp|alibaba|made\s+in\s+china|export|bulk|catalog"
-        r"|sample|contact\s+us)\b",
+        r"\b(wholesale|manufacturer|supplier|factory|oem|odm|moq|rfq|quotation"
+        r"|wechat|whatsapp|alibaba|made\s+in\s+china|bulk"
+        r"|1688|taobao|tmall|pinduoduo|jd\.com)\b",
         re.IGNORECASE,
     ),
 ]
@@ -263,12 +287,16 @@ _SCRIPT_PATTERNS = {
 }
 
 _URL_SPAM_KEYWORDS = {
-    "porn": ["porn", "porno", "xxx", "adult", "sex", "sexy", "cam", "milf"],
-    "casino": ["casino", "slot", "roulette", "blackjack", "jackpot", "poker", "bingo", "lotto"],
-    "betting": ["bet", "bets", "betting", "bookmaker", "sportsbook", "odds", "wager", "parlay", "apuesta", "aposta"],
-    "pharma": ["pharma", "pharmacy", "viagra", "cialis", "levitra", "xanax", "tramadol", "pills", "rx", "meds"],
-    "chinese": ["wechat", "alibaba", "whatsapp", "madeinchina"],
-    "doorway": ["doorway", "landing", "gateway", "bridge"],
+    "porn": ["porn", "porno", "xxx", "adult", "sex", "sexy", "cam", "milf",
+             "onlyfans", "hentai", "fetish", "livesex"],
+    "casino": ["casino", "slot", "roulette", "blackjack", "jackpot", "poker", "bingo", "lotto",
+               "gambling", "freespins", "nodeposit"],
+    "betting": ["bet", "bets", "betting", "bookmaker", "sportsbook", "odds", "wager", "parlay",
+                "apuesta", "aposta", "1xbet", "melbet", "bet365", "betway", "freebets"],
+    "pharma": ["pharma", "pharmacy", "viagra", "cialis", "levitra", "xanax", "tramadol", "pills",
+               "rx", "meds", "noprescription", "cheapviagra", "genericviagra", "pillsonline"],
+    "chinese": ["alibaba", "1688"],
+    "doorway": ["doorway"],
     "parked": [
         "domain for sale", "buy domain", "buy this domain", "domain sale", "domain parking", "parked domain",
         "domain auction", "make offer", "sedo", "afternic", "hugedomains", "parkingcrew", "bodis", "sedoparking",
@@ -457,6 +485,8 @@ def _looks_like_doorway(raw_html: str, text: str) -> bool:
 
 
 def _looks_like_domain_parking(raw_html: str, text: str, link_text: str) -> bool:
+    if _is_browser_error_page(text):
+        return False
     combined = " ".join(part for part in (text, link_text) if part).strip()
     if combined:
         for pattern in _SPAM_PATTERNS.get("parked", []):
@@ -480,8 +510,19 @@ def _looks_like_domain_parking(raw_html: str, text: str, link_text: str) -> bool
     return False
 
 
+SPAM_SCORE_THRESHOLD = 2
+
+
+def _score_patterns(text: str, patterns: list) -> int:
+    """Count unique pattern matches (each pattern scores 1, no double-counting)."""
+    return sum(1 for p in patterns if p.search(text))
+
+
 def _detect_spam_topics(text: str, link_text: str = "", raw_html: str = "") -> list[str]:
     """Return list of spam topic keys detected in text and links."""
+    if _is_browser_error_page(text):
+        return []
+
     combined = " ".join(part for part in (text, link_text) if part).strip()
     if not combined:
         return []
@@ -499,16 +540,21 @@ def _detect_spam_topics(text: str, link_text: str = "", raw_html: str = "") -> l
         if key == "doorway":
             if _looks_like_doorway(raw_html, text):
                 hits.append(key)
-                continue
+            continue
         if key == "parked":
             if _looks_like_domain_parking(raw_html, text, link_text):
                 hits.append(key)
             continue
+
         patterns = _SPAM_PATTERNS.get(key, [])
-        for pattern in patterns:
-            if pattern.search(combined):
-                hits.append(key)
-                break
+        score = _score_patterns(combined, patterns)
+
+        # bare \bsex\b alone scores 1 — needs a companion pattern (e.g. live sex,
+        # sex chat) to reach the threshold; single-word hits below threshold are ignored.
+
+        if score >= SPAM_SCORE_THRESHOLD:
+            hits.append(key)
+
     return hits
 
 
@@ -750,8 +796,18 @@ def _jaccard_similarity(a: set[str], b: set[str]) -> float:
     return len(inter) / len(union)
 
 
-def _detect_topic_shifts(rows: list, signatures: dict, lengths: dict) -> tuple[dict, int, int]:
-    """Detect topic shifts by comparing consecutive snapshot n-gram signatures."""
+def _detect_topic_shifts(
+    rows: list,
+    signatures: dict,
+    lengths: dict,
+    spam_hits_by_idx: dict = None,
+) -> tuple[dict, int, int]:
+    """Detect topic shifts by comparing consecutive snapshot n-gram signatures.
+
+    When spam_hits_by_idx is provided a shift is only flagged if:
+      1. the current snapshot has a spam category score >= SPAM_THRESHOLD, AND
+      2. the previous snapshot was clean (no spam) or had a different primary category.
+    """
     if not rows:
         return {}, 0, 0
     if not bool(current_app.config.get("ARCHIVE_TOPIC_CHANGE_ENABLED", True)):
@@ -765,6 +821,7 @@ def _detect_topic_shifts(rows: list, signatures: dict, lengths: dict) -> tuple[d
     shifts = {}
     checked = 0
     last_sig = None
+    last_valid_idx = None
 
     for idx, _row in enumerate(rows):
         sig = signatures.get(idx)
@@ -773,10 +830,23 @@ def _detect_topic_shifts(rows: list, signatures: dict, lengths: dict) -> tuple[d
         checked += 1
         if last_sig is None:
             last_sig = sig
+            last_valid_idx = idx
             continue
         if _jaccard_similarity(sig, last_sig) < threshold:
+            if spam_hits_by_idx is not None:
+                current_hits = spam_hits_by_idx.get(idx, [])
+                prev_hits = spam_hits_by_idx.get(last_valid_idx, []) if last_valid_idx is not None else []
+                current_is_spam = bool(current_hits)
+                prev_primary = prev_hits[0] if prev_hits else None
+                curr_primary = current_hits[0] if current_hits else None
+                prev_clean_or_different = (not prev_primary) or (prev_primary != curr_primary)
+                if not (current_is_spam and prev_clean_or_different):
+                    last_sig = sig
+                    last_valid_idx = idx
+                    continue
             shifts[idx] = True
         last_sig = sig
+        last_valid_idx = idx
 
     return shifts, checked, len(shifts)
 

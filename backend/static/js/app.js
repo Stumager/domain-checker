@@ -563,20 +563,6 @@ function updateArchiveMeta(payload) {
         }
     }
 
-    const riskEl = document.getElementById("archiveRiskInfo");
-    if (riskEl) {
-        const risk = payload && payload.risk ? payload.risk : null;
-        if (risk && typeof risk.score === "number") {
-            const flags = Array.isArray(risk.flags) && risk.flags.length
-                ? ` | ${risk.flags.map(f => RISK_LABELS[f] || f).join(", ")}`
-                : "";
-            riskEl.textContent = `Risk: ${risk.not_suitable ? "Not suitable" : "OK"} (${risk.score})${flags}`;
-            riskEl.className = risk.not_suitable ? "archive-risk bad" : "archive-risk ok";
-        } else {
-            riskEl.textContent = "";
-            riskEl.className = "";
-        }
-    }
 }
 
 /**
