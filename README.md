@@ -1,19 +1,28 @@
 # Domain Checker
 
 A local desktop tool for bulk domain availability checking with DNS prefiltering,
-RDAP verification, and Wayback Machine history analysis.
+RDAP verification, Wayback Machine history analysis, and a persistent Domain DB
+for tracking known domains across sessions.
 
 ## What it does
 
+### DNS Checker tab
+
 Paste a list of domains or bare labels (e.g. `example` → `example.es`, `example.it`, …)
-and the checker runs a two-stage pipeline:
+and the tool runs a two-stage pipeline:
 
 1. **DNS prefilter** — parallel NS/SOA lookup via dnspython classifies every domain
    as `available`, `taken`, or `unknown`
 2. **RDAP final check** — refines candidates through the RDAP API with automatic
    WHOIS fallback for TLDs that have no RDAP endpoint
 
-On demand, the **Archive tab** fetches the full Wayback Machine history for any domain:
+After a scan, available domains are automatically compared against your Domain DB —
+the results panel shows which ones are **new** (not in any bucket) and which are
+**already known**, with one-click options to copy or add them to a bucket.
+
+### Web Archive modal
+
+Fetches full Wayback Machine history for any domain on demand:
 
 - Spam content detection — casino, pharma, adult, doorway, and parked-page patterns
 - Topic shift and language shift detection across snapshots
@@ -22,13 +31,24 @@ On demand, the **Archive tab** fetches the full Wayback Machine history for any 
 - Domain age (RDAP) and TLS certificate age
 - Composite risk score with per-flag breakdown
 
+### Domain DB tab
+
+A persistent local database (stored in `localStorage`) for managing known domains:
+
+- Organize domains into **TLD buckets** (`.com`, `.net`, `.ru`, …)
+- Import via **drag & drop** (.txt / .csv) or paste — raw URLs, `www.` prefixes,
+  and paths are automatically normalized
+- **Search** within a bucket, **paginate** large lists (50 items at a time)
+- **Export** any bucket as `.txt`
+- Post-scan comparison highlights new domains not yet in any bucket
+
 Results can be downloaded as `.txt` per category or a single `.zip`.
 The app opens automatically in your browser and shuts down when the tab is closed.
 
-## Screenshot
+## Screenshots
 
-![Domain Checker UI](<Снимок экрана 2026-06-13 201041.png>)
-![Web archive UI](<Снимок экрана 2026-06-13 201525.png>)
+![DNS Checker UI](<Снимок экрана 2026-06-13 201041.png>)
+![Web Archive UI](<Снимок экрана 2026-06-13 201525.png>)
 
 ## Tech stack
 
@@ -40,6 +60,7 @@ The app opens automatically in your browser and shuts down when the tab is close
 | Concurrency         | threading, ThreadPoolExecutor   |
 | Archive             | Wayback Machine CDX API         |
 | Frontend            | Vanilla JS, CSS (no frameworks) |
+| Persistence         | Browser localStorage            |
 
 ## Requirements
 
@@ -91,8 +112,10 @@ backend/
 │   ├── models.py             # Thread-safe scan state
 │   ├── check_pipeline.py     # Two-stage checking pipeline
 │   └── routes.py             # API endpoints
-├── static/                   # CSS, JS
-├── templates/                # HTML (single-page)
+├── static/
+│   ├── css/style.css         # All styles (CSS custom properties + component system)
+│   └── js/app.js             # Frontend logic + Domain DB (localStorage)
+├── templates/index.html      # Single-page app shell
 ├── config.py                 # All settings via environment variables
 ├── run.py                    # Entry point
 └── requirements.txt

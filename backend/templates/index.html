@@ -3,162 +3,283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DNS CHECKER</title>
+    <title>Domain Checker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+
         <div class="header">
-            <h1>⚡ DNS CHECKER</h1>
-            <p>DNS prefilter (NS/SOA) • RDAP final verify</p>
+            <h1>Domain Checker</h1>
+            <p>DNS prefilter (NS/SOA) · RDAP verify · Web Archive history</p>
         </div>
 
-        <!-- Content -->
-        <div class="content">
-            <!-- Info Box -->
-            <div class="info">
-                ℹ️ Labels (lines without dot) are automatically multiplied by a default TLD list configured on the server.
-            </div>
+        <div class="tab-nav">
+            <button type="button" class="tab-btn active" data-tab="checker">Domain Checker</button>
+            <button type="button" class="tab-btn" data-tab="domaindb">
+                Domain DB
+                <span class="tab-db-count" id="tabDbCount"></span>
+            </button>
+        </div>
 
-            <!-- Input Form -->
-            <div class="form-group">
-                <label>Domains / Labels (<span id="domainCount">0</span>)</label>
-                <textarea id="domainsInput" placeholder="example.es&#10;test.com&#10;brand (label)"></textarea>
-                <div id="dropHint" class="drop-hint" title="Click to choose files">
-                    Drag &amp; drop CSV/TXT files here or click to choose
-                </div>
-                <input id="domainsFileInput" type="file" accept=".csv,.txt,text/plain" multiple hidden>
-                <div class="tld-filter-row">
-                    <input id="extraTldsInput" type="text" placeholder=".gov, .org">
-                    <button id="filterBtn" type="button" class="btn-primary">Clear TLD</button>
-                </div>
-                <div class="input-hint">Optional: keep multi-level domains only when each extra TLD is listed above.</div>
-            </div>
+        <!-- Tab: Domain Checker -->
+        <div class="tab-panel active" id="tab-checker">
+            <div class="content">
 
-            <!-- Settings -->
-            <div class="settings">
-                <div class="row">
-                    <div class="form-group">
-                        <label>Threads</label>
-                        <input type="number" id="threadsInput" value="32" min="1" max="128">
+                <div class="info">
+                    Labels (lines without a dot) are expanded into full domains using the server's default TLD list.
+                </div>
+
+                <div class="form-group">
+                    <label>Domains / Labels (<span id="domainCount">0</span>)</label>
+                    <textarea id="domainsInput" placeholder="One domain per line — or drag and drop a .txt / .csv file"></textarea>
+                    <div id="dropHint" class="drop-hint" title="Click to choose files">
+                        Drag &amp; drop .csv / .txt files here, or click to choose
                     </div>
-                    <div class="form-group">
-                        <div class="checkbox-row">
-                            <input type="checkbox" id="rdapErrorsToggle" checked>
-                            <label for="rdapErrorsToggle">RDAP recheck for Errors</label>
+                    <input id="domainsFileInput" type="file" accept=".csv,.txt,text/plain" multiple hidden>
+                    <div class="tld-filter-row">
+                        <input id="extraTldsInput" type="text" placeholder=".gov, .co, .org — TLD parts to keep">
+                        <button id="filterBtn" type="button" class="btn-primary">Filter</button>
+                    </div>
+                    <div class="input-hint">Optional: enter multi-level TLD parts to preserve (e.g. co, gov). Domains with other parts are removed and the list is deduplicated.</div>
+                </div>
+
+                <div class="settings">
+                    <div class="row">
+                        <div class="form-group">
+                            <label>Threads</label>
+                            <input type="number" id="threadsInput" value="32" min="1" max="128">
+                        </div>
+                        <div class="form-group">
+                            <div class="checkbox-row">
+                                <input type="checkbox" id="rdapErrorsToggle" checked>
+                                <label for="rdapErrorsToggle">RDAP recheck for errors</label>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Action Buttons -->
-            <div class="buttons">
-                <button class="btn-primary" id="startBtn" onclick="startCheck()">Start Check</button>
-                <button class="btn-primary" id="stopBtn" onclick="stopCheck()" 
-                        style="display: none; background: #ef4444;">Stop</button>
-                <button class="btn-archive" onclick="toggleArchiveModal()">Web Archive 🏛️</button>
-            </div>
+                <div class="buttons">
+                    <button type="button" class="btn-primary" id="startBtn" onclick="startCheck()">Start check</button>
+                    <button type="button" class="btn-stop" id="stopBtn" onclick="stopCheck()" style="display:none">Stop</button>
+                    <button type="button" class="btn-indigo" onclick="toggleArchiveModal()">Web Archive</button>
+                </div>
 
-            <!-- Progress Section -->
-            <div class="progress-section" id="progressSection">
-                <div class="current-domain" id="currentDomain"></div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                    <span class="progress-label" id="progressLabel">0%</span>
+                <div class="progress-section" id="progressSection">
+                    <div class="current-domain" id="currentDomain"></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                        <span class="progress-label" id="progressLabel">0%</span>
+                    </div>
+                    <div class="stats">
+                        <div class="stat-box available">
+                            <div class="stat-label">Available</div>
+                            <div class="stat-value" id="availableStat">0</div>
+                        </div>
+                        <div class="stat-box taken">
+                            <div class="stat-label">Taken</div>
+                            <div class="stat-value" id="takenStat">0</div>
+                        </div>
+                        <div class="stat-box invalid">
+                            <div class="stat-label">Invalid</div>
+                            <div class="stat-value" id="invalidStat">0</div>
+                        </div>
+                        <div class="stat-box errors">
+                            <div class="stat-label">Errors</div>
+                            <div class="stat-value" id="errorsStat">0</div>
+                        </div>
+                    </div>
+                    <div id="statusMsg"></div>
                 </div>
-                <div class="stats">
-                    <div class="stat-box available">
-                        <div class="stat-label">Available</div>
-                        <div class="stat-value" id="availableStat">0</div>
-                    </div>
-                    <div class="stat-box taken">
-                        <div class="stat-label">Taken</div>
-                        <div class="stat-value" id="takenStat">0</div>
-                    </div>
-                    <div class="stat-box invalid">
-                        <div class="stat-label">Invalid</div>
-                        <div class="stat-value" id="invalidStat">0</div>
-                    </div>
-                    <div class="stat-box errors">
-                        <div class="stat-label">Errors</div>
-                        <div class="stat-value" id="errorsStat">0</div>
-                    </div>
-                </div>
-                <div id="statusMsg"></div>
-            </div>
 
-            <!-- Results Section -->
-            <div class="results-section" id="resultsSection">
-                <div class="results-grid">
-                    <!-- placeholder for RDAP error summary (populated by JS) -->
-                    <div id="rdapErrorInfo" style="width:100%; text-align:center; color:#f59e0b; margin-bottom:10px;"></div>
-                    <div class="result-card available">
-                        <h3>Available</h3>
-                        <div class="result-count" id="resultAvailable">0</div>
-                        <button class="download-btn" onclick="downloadResult('available')">📥 Download</button>
+                <div class="results-section" id="resultsSection">
+                    <div class="results-grid">
+                        <div id="rdapErrorInfo"></div>
+                        <div class="result-card available">
+                            <h3>Available</h3>
+                            <div class="result-count" id="resultAvailable">0</div>
+                            <button type="button" class="download-btn" onclick="downloadResult('available')">
+                                Download
+                            </button>
+                        </div>
+                        <div class="result-card taken">
+                            <h3>Taken</h3>
+                            <div class="result-count" id="resultTaken">0</div>
+                            <button type="button" class="download-btn" onclick="downloadResult('taken')">
+                                Download
+                            </button>
+                        </div>
+                        <div class="result-card invalid">
+                            <h3>Invalid</h3>
+                            <div class="result-count" id="resultInvalid">0</div>
+                            <button type="button" class="download-btn" onclick="downloadResult('invalid')">
+                                Download
+                            </button>
+                        </div>
+                        <div class="result-card errors">
+                            <h3>Errors</h3>
+                            <div class="result-count" id="resultErrors">0</div>
+                            <button type="button" class="download-btn" onclick="downloadResult('errors')">
+                                Download
+                            </button>
+                        </div>
                     </div>
-                    <div class="result-card taken">
-                        <h3>Taken</h3>
-                        <div class="result-count" id="resultTaken">0</div>
-                        <button class="download-btn" onclick="downloadResult('taken')">📥 Download</button>
-                    </div>
-                    <div class="result-card invalid">
-                        <h3>Invalid</h3>
-                        <div class="result-count" id="resultInvalid">0</div>
-                        <button class="download-btn" onclick="downloadResult('invalid')">📥 Download</button>
-                    </div>
-                    <div class="result-card errors">
-                        <h3>Errors</h3>
-                        <div class="result-count" id="resultErrors">0</div>
-                        <button class="download-btn" onclick="downloadResult('errors')">📥 Download</button>
+                    <div class="results-download-all">
+                        <button type="button" class="btn-primary" onclick="downloadAllResults()">
+                            Export all as ZIP
+                        </button>
                     </div>
                 </div>
-                <div style="text-align:center; margin-top:20px;">
-                    <button class="btn-primary" onclick="downloadAllResults()" style="max-width:400px;">📦 Download All (ZIP)</button>
+
+                <!-- Post-scan comparison with Domain DB -->
+                <div class="db-new-domains-section" id="dbNewDomainsSection" style="display:none">
+                    <div class="db-new-domains-header">
+                        <h3>Domain DB comparison</h3>
+                        <span class="db-new-summary" id="dbNewSummary"></span>
+                    </div>
+                    <div class="db-sub-tabs">
+                        <button type="button" class="db-sub-tab active" data-subtab="new" onclick="dbSwitchSubTab('new')">
+                            New (<span id="dbNewCount">0</span>)
+                        </button>
+                        <button type="button" class="db-sub-tab" data-subtab="known" onclick="dbSwitchSubTab('known')">
+                            Known (<span id="dbKnownCount">0</span>)
+                        </button>
+                    </div>
+                    <div id="dbNewList" class="db-comparison-list"></div>
+                    <div id="dbKnownList" class="db-comparison-list" style="display:none"></div>
+                    <div class="db-new-actions">
+                        <button type="button" class="btn-primary" id="dbAddNewBtn" onclick="dbAddNewToBucket()">
+                            + Add new to DB
+                        </button>
+                        <button type="button" class="db-secondary-btn" onclick="dbCopyNew()">
+                            Copy new
+                        </button>
+                    </div>
                 </div>
+
             </div>
         </div>
-    </div>
+
+        <!-- Tab: Domain DB -->
+        <div class="tab-panel" id="tab-domaindb">
+            <div class="db-layout">
+
+                <div class="db-sidebar">
+                    <div class="db-sidebar-header">
+                        <span>TLD Buckets</span>
+                        <button type="button" class="db-add-tld-btn" id="dbAddTldBtn" title="New bucket">+</button>
+                    </div>
+                    <div class="db-add-tld-form" id="dbAddTldForm" style="display:none">
+                        <input type="text" id="dbTldInput" placeholder=".com" maxlength="20">
+                    </div>
+                    <div class="db-tld-list" id="dbTldList"></div>
+                    <div class="db-sidebar-footer" id="dbSizeInfo"></div>
+                </div>
+
+                <div class="db-main">
+                    <div id="dbEmptyState" class="db-empty-state">
+                        Create your first bucket — click <strong>+</strong> and type a TLD (.com, .net…)
+                    </div>
+
+                    <div id="dbBucketView" style="display:none">
+                        <div class="db-bucket-header">
+                            <h3 id="dbBucketTitle">.com</h3>
+                            <div class="db-bucket-meta">
+                                <span id="dbBucketCount"></span>
+                                <span id="dbBucketUpdated"></span>
+                            </div>
+                            <div class="db-bucket-actions">
+                                <button type="button" class="db-export-btn" onclick="dbExportTld()">
+                                    Export
+                                </button>
+                                <button type="button" class="db-clear-btn" onclick="dbClearTld()">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="db-upload-zone" id="dbUploadZone">
+                            <textarea id="dbPasteArea" placeholder="Paste domains — one per line or comma-separated&#10;Accepts: http://domain.com, www.example.net, plain names…"></textarea>
+                            <button type="button" class="btn-primary" onclick="dbImportFromPaste()">
+                                Add to bucket
+                            </button>
+                        </div>
+
+                        <div class="db-stats-bar" id="dbStatsBar"></div>
+
+                        <div class="db-search-row">
+                            <input type="text" id="dbSearchInput"
+                                   placeholder="Search in this bucket…"
+                                   oninput="dbSearch(this.value)">
+                        </div>
+
+                        <div class="db-domain-list" id="dbDomainList"></div>
+
+                        <div id="dbLoadMore" style="display:none; padding:10px 0;">
+                            <button type="button" class="db-load-more-btn" onclick="dbLoadMoreDomains()">
+                                Load more
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div><!-- .container -->
 
     <!-- Archive Modal -->
     <div class="modal-overlay" id="archiveModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Domain History</h2>
-                <button onclick="toggleArchiveModal()">Close</button>
+                <h2>Web Archive — Domain History</h2>
+                <button type="button" class="modal-close-btn" onclick="toggleArchiveModal()">x</button>
             </div>
-            <div class="archive-search">
-                <input type="text" id="archiveSearchInput" placeholder="Enter domain..." 
-                       onkeypress="handleArchiveKeyPress(event)">
-                <input type="text" id="archiveProxyInput" placeholder="Proxy (optional): ip:port or http://user:pass@ip:port" 
-                       onkeypress="handleArchiveKeyPress(event)">
-                <button onclick="fetchWaybackData()">Search</button>
+            <div class="modal-body">
+                <div class="archive-search">
+                    <div class="archive-search-row">
+                        <input type="text" id="archiveSearchInput"
+                               placeholder="Enter domain name…"
+                               onkeypress="handleArchiveKeyPress(event)">
+                        <button type="button" class="archive-search-btn" onclick="fetchWaybackData()">
+                            Search
+                        </button>
+                    </div>
+                    <input type="text" id="archiveProxyInput"
+                           placeholder="Proxy (optional): ip:port or http://user:pass@ip:port"
+                           onkeypress="handleArchiveKeyPress(event)">
+                </div>
+
+                <div class="archive-meta">
+                    <span id="archiveRangeInfo">Range: —</span>
+                    <span id="archiveProxyInfo">Proxy: Direct connection</span>
+                    <span id="archiveTotalInfo">Total snapshots: 0</span>
+                    <span id="archiveRedirectInfo"></span>
+                    <span id="archiveRiskInfo"></span>
+                </div>
+
+                <div class="checkbox-row archive-filter-row">
+                    <input type="checkbox" id="archiveHideNaToggle" checked>
+                    <label for="archiveHideNaToggle">Hide N/A rows</label>
+                </div>
+
+                <table class="archive-table">
+                    <thead>
+                        <tr>
+                            <th>Date (UTC)</th>
+                            <th>Code</th>
+                            <th>Link</th>
+                            <th>Redirect / Signals</th>
+                        </tr>
+                    </thead>
+                    <tbody id="archiveTableBody"></tbody>
+                </table>
             </div>
-            <div class="archive-meta">
-                <span id="archiveRangeInfo">Range: —</span>
-                <span id="archiveProxyInfo">Proxy: Direct connection</span>
-                <span id="archiveTotalInfo">Total snapshots: 0</span>
-                <span id="archiveRedirectInfo"></span>
-                <span id="archiveRiskInfo"></span>
-            </div>
-            <div class="checkbox-row" style="margin-bottom: 12px;">
-                <input type="checkbox" id="archiveHideNaToggle" checked>
-                <label for="archiveHideNaToggle">Hide N/A rows</label>
-            </div>
-            <table class="archive-table">
-                <thead>
-                    <tr>
-                        <th>Date (UTC)</th>
-                        <th>Code</th>
-                        <th>Link</th>
-                        <th>Redirect / Spam / Topic</th>
-                    </tr>
-                </thead>
-                <tbody id="archiveTableBody"></tbody>
-            </table>
         </div>
     </div>
+
+    <div class="db-toast-container" id="dbToastContainer"></div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
