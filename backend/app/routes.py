@@ -73,6 +73,8 @@ def start_check():
         threads = 32
     tlds_raw = (data.get("tlds") or "").strip()
     rdap_recheck_errors = bool(data.get("rdap_recheck_errors", False))
+    dns_enabled = bool(data.get("dns_enabled", True))
+    rdap_enabled = bool(data.get("rdap_enabled", True))
 
     if not domains_str:
         return jsonify({"error": "No domains"}), 400
@@ -105,7 +107,8 @@ def start_check():
     t = threading.Thread(
         target=run_check,
         args=(state, expanded_domains, threads, rdap_recheck_errors,
-              final_check_enabled, final_check_workers, dns_strict_tlds),
+              final_check_enabled, final_check_workers, dns_strict_tlds,
+              dns_enabled, rdap_enabled),
     )
     t.daemon = True
     try:

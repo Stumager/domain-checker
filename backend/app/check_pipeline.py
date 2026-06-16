@@ -72,6 +72,8 @@ def run_check(
     final_check_enabled: bool = True,
     final_check_workers: int = 12,
     dns_strict_tlds: list = None,
+    dns_enabled: bool = True,
+    rdap_enabled: bool = True,
 ):
     """Main two-stage checking pipeline (runs in a background thread)."""
     try:
@@ -89,52 +91,62 @@ def run_check(
             state.invalid = []
             state.errors = []
             state.current_domain = ""
-            state.message = "Started (DNS prefilter)"
+            state.message = "Started (DNS prefilter)" if dns_enabled else "DNS prefilter skipped"
 
-        def dns_worker(domain: str):
-            if state.is_stop_requested():
-                return
-            try:
-                result = dns_check(domain)
-            except Exception:
-                result = "error"
-            if state.is_stop_requested():
-                return
-            tld = _get_domain_tld(domain)
-            is_strict = bool(strict_set) and tld in strict_set
-            with state.lock:
-                if state.stop_requested:
-                    return
-                if result == "available":
-                    state.available.append(domain)
-                elif result == "taken":
-                    state.taken.append(domain)
-                elif result == "invalid":
-                    state.invalid.append(domain)
-                elif result == "unknown":
-                    if is_strict:
-                        state.taken.append(domain)
-                    else:
-                        state.errors.append(domain)
-                else:
-                    state.errors.append(domain)
-                state.checked += 1
-                state.current_domain = domain
-                state.message = f"Checked {state.checked}/{state.total} (DNS prefilter)"
-
-        _run_thread_pool(
-            domains_raw,
-            dns_worker,
-            max_workers=max(1, threads),
-            should_cancel=state.is_stop_requested,
-        )
-
-        if state.is_stop_requested():
+        if not dns_enabled and not rdap_enabled:
             _dedupe_results(state)
-            state.finish(stage="stopped", message="Stopped by user.")
+            state.finish(stage="done", message="Done!")
             return
 
-        if not final_check_enabled:
+        if dns_enabled:
+            def dns_worker(domain: str):
+                if state.is_stop_requested():
+                    return
+                try:
+                    result = dns_check(domain)
+                except Exception:
+                    result = "error"
+                if state.is_stop_requested():
+                    return
+                tld = _get_domain_tld(domain)
+                is_strict = bool(strict_set) and tld in strict_set
+                with state.lock:
+                    if state.stop_requested:
+                        return
+                    if result == "available":
+                        state.available.append(domain)
+                    elif result == "taken":
+                        state.taken.append(domain)
+                    elif result == "invalid":
+                        state.invalid.append(domain)
+                    elif result == "unknown":
+                        if is_strict:
+                            state.taken.append(domain)
+                        else:
+                            state.errors.append(domain)
+                    else:
+                        state.errors.append(domain)
+                    state.checked += 1
+                    state.current_domain = domain
+                    state.message = f"Checked {state.checked}/{state.total} (DNS prefilter)"
+
+            _run_thread_pool(
+                domains_raw,
+                dns_worker,
+                max_workers=max(1, threads),
+                should_cancel=state.is_stop_requested,
+            )
+
+            if state.is_stop_requested():
+                _dedupe_results(state)
+                state.finish(stage="stopped", message="Stopped by user.")
+                return
+        else:
+            with state.lock:
+                state.available = list(domains_raw)
+                state.checked = len(domains_raw)
+
+        if not final_check_enabled or not rdap_enabled:
             _dedupe_results(state)
             state.finish(stage="done", message="Done!")
             return

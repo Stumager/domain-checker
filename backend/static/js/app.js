@@ -85,6 +85,8 @@ async function startCheck() {
         threads = 32;
         document.getElementById("threadsInput").value = threads;
     }
+    const dnsEnabled = document.getElementById("dnsEnabledToggle").checked;
+    const rdapEnabled = document.getElementById("rdapEnabledToggle").checked;
     const rdapRecheckErrors = document.getElementById("rdapErrorsToggle").checked;
 
     if (!domains) {
@@ -111,6 +113,8 @@ async function startCheck() {
             body: JSON.stringify({
                 domains,
                 threads,
+                dns_enabled: dnsEnabled,
+                rdap_enabled: rdapEnabled,
                 rdap_recheck_errors: rdapRecheckErrors
             })
         });
