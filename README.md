@@ -16,6 +16,11 @@ and the tool runs a two-stage pipeline:
 2. **RDAP final check** — refines candidates through the RDAP API with automatic
    WHOIS fallback for TLDs that have no RDAP endpoint
 
+Each stage can be toggled independently via the **Scan stages** checkboxes:
+- **DNS prefilter (NS/SOA)** — uncheck to skip DNS and send all domains straight to RDAP
+- **RDAP check** — uncheck to stop after DNS and use DNS results as the final output
+- **RDAP recheck for errors** — also run RDAP on domains that DNS could not resolve
+
 After a scan, available domains are automatically compared against your Domain DB —
 the results panel shows which ones are **new** (not in any bucket) and which are
 **already known**, with one-click options to copy or add them to a bucket.
@@ -51,7 +56,7 @@ The app opens automatically in your browser and shuts down when the tab is close
 
 Run the app and capture screenshots, then place them in `docs/screenshots/`.
 
-![Main checker](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20164557.png)
+![Main checker](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-16%20105035.png)
 ![Web Archive](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20164632.png)
 ![Domain DB](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20165042.png)
 
@@ -159,6 +164,8 @@ Start a domain availability scan.
   "domains": "example\ntest.com",
   "threads": 32,
   "tlds": "es it pl",
+  "dns_enabled": true,
+  "rdap_enabled": true,
   "rdap_recheck_errors": false
 }
 ```
@@ -168,6 +175,8 @@ Start a domain availability scan.
 | `domains` | string | required | Newline-separated domains or bare labels |
 | `threads` | int | `32` | DNS prefilter thread count (1–128) |
 | `tlds` | string | _(server default)_ | TLDs for label expansion; uses `DEFAULT_TLDS` if empty |
+| `dns_enabled` | bool | `true` | Run the DNS prefilter stage; if false, all domains go directly to RDAP |
+| `rdap_enabled` | bool | `true` | Run the RDAP final check; if false, DNS results are the final output |
 | `rdap_recheck_errors` | bool | `false` | Run RDAP on DNS-error domains too |
 
 **Response (200):**
