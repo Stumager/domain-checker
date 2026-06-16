@@ -236,7 +236,7 @@ async function updateStatus() {
             }
 
             console.log("Check complete! Results ready for download");
-            if (data.available > 0) dbFetchAndCompareAvailable();
+            if (data.available > 0 || data.errors > 0) dbFetchAndCompareScanResults();
             const inputEl = document.getElementById("domainsInput");
             if (inputEl) {
                 const allLines = inputEl.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1304,13 +1304,20 @@ let dbNewDomains = [];
 let dbKnownDomains = [];
 let dbActiveSubTab = "new";
 
-async function dbFetchAndCompareAvailable() {
+async function dbFetchAndCompareScanResults() {
     try {
-        const resp = await fetch("/api/download/available");
-        if (!resp.ok) return;
-        const text = await resp.text();
-        const domains = text.split(/\r?\n/).map(d => d.trim()).filter(Boolean);
-        if (domains.length) dbRunComparison(domains);
+        const [availResp, errResp] = await Promise.all([
+            fetch("/api/download/available"),
+            fetch("/api/download/errors"),
+        ]);
+        const parse = async (resp) => {
+            if (!resp.ok) return [];
+            const text = await resp.text();
+            return text.split(/\r?\n/).map(d => d.trim()).filter(Boolean);
+        };
+        const [available, errors] = await Promise.all([parse(availResp), parse(errResp)]);
+        const merged = Array.from(new Set([...available, ...errors]));
+        if (merged.length) dbRunComparison(merged);
     } catch (_e) {}
 }
 
