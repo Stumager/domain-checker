@@ -56,15 +56,15 @@ Returns current scan state.
 
 Starts a new scan.
 
-Example body:
+Request body fields:
 
-```json
-{
-  "domains": "example.com\nbrand",
-  "threads": 32,
-  "rdap_recheck_errors": true
-}
-```
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `domains` | string | required | Newline-separated domain list |
+| `threads` | int | 32 | DNS thread count |
+| `rdap_recheck_errors` | bool | false | Re-check RDAP error results |
+| `dns_enabled` | bool | true | Run DNS prefilter stage (NS/SOA) |
+| `rdap_enabled` | bool | true | Run RDAP final check stage |
 
 If a scan is already running, returns `409`.
 
@@ -126,6 +126,9 @@ Browser disconnect endpoint used by the local UI.
 - `BROWSER_MONITOR_STARTUP_GRACE`
 - `BROWSER_MONITOR_SHUTDOWN_DELAY`
 - `AUTO_OPEN_BROWSER`
+- `ARCHIVE_TOPIC_CHANGE_ONLY_IF_SPAM` — only flag topic shifts that lead to spam snapshots (default `1`)
+- `ARCHIVE_CJK_DENSITY_THRESHOLD` — minimum CJK character density to label as ideographs (default `0.25`)
+- `ARCHIVE_CHINESE_DENSITY_THRESHOLD` — minimum CJK density required before checking Chinese spam terms (default `0.15`)
 
 See `.env.example` for a minimal template.
 

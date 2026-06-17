@@ -12,7 +12,7 @@ from urllib.parse import urlsplit, unquote
 
 from flask import current_app
 
-from .fetcher import _perform_request
+from .fetcher import _perform_request, _normalize_wayback_location
 
 
 # ---------------------------------------------------------------------------
@@ -21,13 +21,15 @@ from .fetcher import _perform_request
 
 _SPAM_ORDER = ("porn", "casino", "pharma", "betting", "ideographs", "chinese", "doorway", "parked")
 
+_PORN_SEX_BARE = re.compile(r"\bsex\b", re.IGNORECASE)
+
 _SPAM_PATTERNS = {
     "porn": [
         re.compile(r"\bporn\b", re.IGNORECASE),
         re.compile(r"\bporno\b", re.IGNORECASE),
         re.compile(r"\bxxx\b", re.IGNORECASE),
         re.compile(r"\bxxx[-_]?\w*\b", re.IGNORECASE),
-        re.compile(r"\bsex\b", re.IGNORECASE),
+        _PORN_SEX_BARE,
         re.compile(r"\bsexo\b", re.IGNORECASE),
         re.compile(r"\bsexe\b", re.IGNORECASE),
         re.compile(r"\badult[oa]s?\b", re.IGNORECASE),
@@ -55,36 +57,6 @@ _SPAM_PATTERNS = {
         re.compile(r"порно", re.IGNORECASE),
         re.compile(r"эрот", re.IGNORECASE),
         re.compile(r"секс", re.IGNORECASE),
-    ],
-    "casino": [
-        re.compile(r"\bcasino\b", re.IGNORECASE),
-        re.compile(r"\bslot\s+machine(s)?\b", re.IGNORECASE),
-        re.compile(r"\b(free|online|real\s+money)\s+slots?\b", re.IGNORECASE),
-        re.compile(r"\bjackpot\b", re.IGNORECASE),
-        re.compile(r"\broulette\b", re.IGNORECASE),
-        re.compile(r"\bblackjack\b", re.IGNORECASE),
-        re.compile(r"\btragamonedas\b", re.IGNORECASE),
-        re.compile(r"\bspielcasino\b", re.IGNORECASE),
-        re.compile(r"\bspielbank\b", re.IGNORECASE),
-        re.compile(r"\bpoker\b", re.IGNORECASE),
-        re.compile(r"\bbaccarat\b", re.IGNORECASE),
-        re.compile(r"\bkeno\b", re.IGNORECASE),
-        re.compile(r"\bcraps\b", re.IGNORECASE),
-        re.compile(r"\bonline\s+casino\b", re.IGNORECASE),
-        re.compile(r"\bcasino\s+bonus\b", re.IGNORECASE),
-        re.compile(r"\bfree\s+spins\b", re.IGNORECASE),
-        re.compile(r"\bno\s+deposit\s+bonus\b", re.IGNORECASE),
-        re.compile(r"\blive\s+casino\b", re.IGNORECASE),
-        re.compile(r"\b(pragmatic|netent|microgaming|playtech)\b", re.IGNORECASE),
-        re.compile(r"\bgambling\b", re.IGNORECASE),
-        re.compile(r"бинго", re.IGNORECASE),
-        re.compile(r"джекпот", re.IGNORECASE),
-        re.compile(r"казино", re.IGNORECASE),
-        re.compile(r"слот", re.IGNORECASE),
-        re.compile(r"рулетк", re.IGNORECASE),
-        re.compile(r"покер", re.IGNORECASE),
-        re.compile(r"\bбонус\s+казино\b", re.IGNORECASE),
-        re.compile(r"\bбесплатные\s+вращени", re.IGNORECASE),
     ],
     "pharma": [
         re.compile(r"\bviagra\b", re.IGNORECASE),
@@ -118,31 +90,6 @@ _SPAM_PATTERNS = {
         re.compile(r"лекар", re.IGNORECASE),
         re.compile(r"\bонлайн\s+аптек\b", re.IGNORECASE),
         re.compile(r"\bкупить\s+(виагру|таблетки|лекарства)\b", re.IGNORECASE),
-    ],
-    "betting": [
-        re.compile(r"\bbetting\b", re.IGNORECASE),
-        re.compile(r"\bapuestas?\b", re.IGNORECASE),
-        re.compile(r"\bapostas?\b", re.IGNORECASE),
-        re.compile(r"\bscommess\w*\b", re.IGNORECASE),
-        re.compile(r"\bparis?\s+sportifs?\b", re.IGNORECASE),
-        re.compile(r"\bsportwetten\b", re.IGNORECASE),
-        re.compile(r"\bwetten\b", re.IGNORECASE),
-        re.compile(r"\bwager(s|ing)?\b", re.IGNORECASE),
-        re.compile(r"\bsportsbook\b", re.IGNORECASE),
-        re.compile(r"\bsports?\s*betting\b", re.IGNORECASE),
-        re.compile(r"\bbookmaker\b", re.IGNORECASE),
-        re.compile(r"\bparlay\b", re.IGNORECASE),
-        re.compile(r"\bonline\s+betting\b", re.IGNORECASE),
-        re.compile(r"\bsports?\s+odds\b", re.IGNORECASE),
-        re.compile(r"\bbetting\s+tips?\b", re.IGNORECASE),
-        re.compile(r"\bfree\s+bets?\b", re.IGNORECASE),
-        re.compile(r"\b(1xbet|melbet|betway|bet365|betwinner)\b", re.IGNORECASE),
-        re.compile(r"коэфф", re.IGNORECASE),
-        re.compile(r"ставк", re.IGNORECASE),
-        re.compile(r"букмекер", re.IGNORECASE),
-        re.compile(r"тотализатор", re.IGNORECASE),
-        re.compile(r"\bставки\s+на\s+спорт\b", re.IGNORECASE),
-        re.compile(r"\bпрогноз\s+матча\b", re.IGNORECASE),
     ],
     "doorway": [
         # Primary detection is via _looks_like_doorway(); keywords here are supplemental.
@@ -179,6 +126,93 @@ _SPAM_PATTERNS = {
 }
 
 _CJK_RE = re.compile(r"[一-鿿]")
+_SCRIPT_STYLE_RE = re.compile(r"<(script|style)[^>]*>.*?</(script|style)>", re.IGNORECASE | re.DOTALL)
+
+
+def _cjk_density(text: str) -> float:
+    """Return fraction of characters that are CJK ideographs."""
+    if not text or len(text) < 50:
+        return 0.0
+    return len(_CJK_RE.findall(text)) / len(text)
+
+
+def _cjk_density_from_html(raw_html: str, fallback: str = "") -> float:
+    """Compute CJK density on script/style-stripped HTML to avoid Wayback JS dilution."""
+    if raw_html:
+        clean = re.sub(r"<[^>]+>", " ", _SCRIPT_STYLE_RE.sub(" ", raw_html))
+        return _cjk_density(clean)
+    return _cjk_density(fallback)
+
+
+def _cjk_clean_text(raw_html: str, fallback: str = "") -> str:
+    """Return script/style-stripped visible text for CJK character counting."""
+    if raw_html:
+        return re.sub(r"<[^>]+>", " ", _SCRIPT_STYLE_RE.sub(" ", raw_html))
+    return fallback
+
+
+_CASINO_TIER1 = [
+    re.compile(r"\bonline\s+casino\b", re.IGNORECASE),
+    re.compile(r"\bcasino\s+bonus\b", re.IGNORECASE),
+    re.compile(r"\bfree\s+spins\b", re.IGNORECASE),
+    re.compile(r"\bno\s+deposit\s+bonus\b", re.IGNORECASE),
+    re.compile(r"\blive\s+casino\b", re.IGNORECASE),
+    re.compile(r"\bslot\s+machine(s)?\b", re.IGNORECASE),
+    re.compile(r"\b(free|online|real\s+money)\s+slots?\b", re.IGNORECASE),
+    re.compile(r"\b(pragmatic|netent|microgaming|playtech)\b", re.IGNORECASE),
+    re.compile(r"\bбонус\s+казино\b", re.IGNORECASE),
+    re.compile(r"\bбесплатные\s+вращени", re.IGNORECASE),
+]
+
+_CASINO_TIER2 = [
+    re.compile(r"\bcasino\b", re.IGNORECASE),
+    re.compile(r"\bjackpot\b", re.IGNORECASE),
+    re.compile(r"\broulette\b", re.IGNORECASE),
+    re.compile(r"\bblackjack\b", re.IGNORECASE),
+    re.compile(r"\bpoker\b", re.IGNORECASE),
+    re.compile(r"\bbaccarat\b", re.IGNORECASE),
+    re.compile(r"\bkeno\b", re.IGNORECASE),
+    re.compile(r"\bcraps\b", re.IGNORECASE),
+    re.compile(r"\btragamonedas\b", re.IGNORECASE),
+    re.compile(r"\bspielcasino\b", re.IGNORECASE),
+    re.compile(r"\bspielbank\b", re.IGNORECASE),
+    re.compile(r"\bgambling\b", re.IGNORECASE),
+    re.compile(r"бинго", re.IGNORECASE),
+    re.compile(r"джекпот", re.IGNORECASE),
+    re.compile(r"казино", re.IGNORECASE),
+    re.compile(r"слот", re.IGNORECASE),
+    re.compile(r"рулетк", re.IGNORECASE),
+    re.compile(r"покер", re.IGNORECASE),
+]
+
+_BETTING_TIER1 = [
+    re.compile(r"\bsports?\s*betting\b", re.IGNORECASE),
+    re.compile(r"\bonline\s+betting\b", re.IGNORECASE),
+    re.compile(r"\bbetting\s+tips?\b", re.IGNORECASE),
+    re.compile(r"\bfree\s+bets?\b", re.IGNORECASE),
+    re.compile(r"\bsportsbook\b", re.IGNORECASE),
+    re.compile(r"\bsports?\s+odds\b", re.IGNORECASE),
+    re.compile(r"\bparis?\s+sportifs?\b", re.IGNORECASE),
+    re.compile(r"\bsportwetten\b", re.IGNORECASE),
+    re.compile(r"\b(1xbet|melbet|betway|bet365|betwinner)\b", re.IGNORECASE),
+    re.compile(r"\bставки\s+на\s+спорт\b", re.IGNORECASE),
+    re.compile(r"\bпрогноз\s+матча\b", re.IGNORECASE),
+]
+
+_BETTING_TIER2 = [
+    re.compile(r"\bbetting\b", re.IGNORECASE),
+    re.compile(r"\bapuestas?\b", re.IGNORECASE),
+    re.compile(r"\bapostas?\b", re.IGNORECASE),
+    re.compile(r"\bscommess\w*\b", re.IGNORECASE),
+    re.compile(r"\bwetten\b", re.IGNORECASE),
+    re.compile(r"\bwager(s|ing)?\b", re.IGNORECASE),
+    re.compile(r"\bbookmaker\b", re.IGNORECASE),
+    re.compile(r"\bparlay\b", re.IGNORECASE),
+    re.compile(r"коэфф", re.IGNORECASE),
+    re.compile(r"ставк", re.IGNORECASE),
+    re.compile(r"букмекер", re.IGNORECASE),
+    re.compile(r"тотализатор", re.IGNORECASE),
+]
 
 _PARKED_BRANDS = [
     re.compile(r"\bsedo\b", re.IGNORECASE),
@@ -200,7 +234,7 @@ _PARKED_BRANDS = [
 ]
 
 _BROWSER_ERROR_PATTERNS = [
-    re.compile(r"this\s+site\s+can['’]t\s+be\s+reached", re.IGNORECASE),
+    re.compile(r"this\s+site\s+can[‘’]t\s+be\s+reached", re.IGNORECASE),
     re.compile(r"err_(?:name_not_resolved|connection_refused|timed_out|ssl)", re.IGNORECASE),
     re.compile(r"dns_probe_finished", re.IGNORECASE),
     re.compile(r"webpage\s+(?:is\s+not\s+available|not\s+found)", re.IGNORECASE),
@@ -210,11 +244,22 @@ _BROWSER_ERROR_PATTERNS = [
     re.compile(r"server\s+not\s+found", re.IGNORECASE),
     re.compile(r"index\s+of\s+/", re.IGNORECASE),
     re.compile(r"it\s+works!\s*(?:this\s+is\s+the\s+default\s+web\s+page)", re.IGNORECASE),
+    # Parking / registrar default pages (short pages only — see len guard below)
+    re.compile(r"this\s+page\s+is\s+intentionally\s+left\s+blank", re.IGNORECASE),
+    re.compile(r"domain\s+default\s+page", re.IGNORECASE),
+    re.compile(r"godaddy\.com/domains", re.IGNORECASE),
+    re.compile(r"namecheap\.com/domains", re.IGNORECASE),
+    re.compile(r"web\.com\s+web\s+hosting", re.IGNORECASE),
 ]
 
 
 def _is_browser_error_page(text: str) -> bool:
-    """Return True if this looks like a browser/server error or default page."""
+    """Return True if this looks like a browser/server error or default page.
+
+    The len > 2000 guard is intentional: browser error and default registrar
+    pages are always short. A 3000-char casino page must NOT be skipped even if
+    it incidentally mentions a hosting provider in its footer.
+    """
     if not text or len(text) > 2000:
         return False
     return any(p.search(text) for p in _BROWSER_ERROR_PATTERNS)
@@ -519,7 +564,14 @@ def _score_patterns(text: str, patterns: list) -> int:
 
 
 def _detect_spam_topics(text: str, link_text: str = "", raw_html: str = "") -> list[str]:
-    """Return list of spam topic keys detected in text and links."""
+    """Return list of spam topic keys detected in text and links.
+
+    Smoke-test cases:
+      A — fully Chinese page (1000 chars, 800 CJK): combined has 800 CJK > 50 → ideographs ✓
+      B — English page with 2 Chinese chars: 2 CJK < 50 and < cjk_min → no hit ✓
+      C — browser error (150 chars, "server not found"): len 150 < 2000 → _is_browser_error_page True → skip ✓
+      D — casino spam (2500 chars, "free spins", "casino bonus"): len 2500 > 2000 → no error skip; tier1=0 tier2=2 ≥ 2 → casino ✓
+    """
     if _is_browser_error_page(text):
         return []
 
@@ -530,11 +582,27 @@ def _detect_spam_topics(text: str, link_text: str = "", raw_html: str = "") -> l
     hits = []
     for key in _SPAM_ORDER:
         if key == "ideographs":
-            if _CJK_RE.search(combined):
+            cjk_min = int(current_app.config.get("ARCHIVE_CJK_MIN_CHARS", 10))
+            # Fallback: count directly in already-stripped combined before trying raw_html clean
+            if len(_CJK_RE.findall(combined)) > 50 or len(_CJK_RE.findall(_cjk_clean_text(raw_html, combined))) >= cjk_min:
                 hits.append(key)
             continue
         if key == "chinese":
-            if _CJK_RE.search(combined) and any(p.search(combined) for p in _CHINESE_SPAM_TERMS):
+            cjk_min = int(current_app.config.get("ARCHIVE_CJK_MIN_CHARS", 10))
+            cjk_count = max(len(_CJK_RE.findall(combined)), len(_CJK_RE.findall(_cjk_clean_text(raw_html, combined))))
+            if cjk_count >= cjk_min and any(p.search(combined) for p in _CHINESE_SPAM_TERMS):
+                hits.append(key)
+            continue
+        if key == "casino":
+            tier1 = sum(3 for p in _CASINO_TIER1 if p.search(combined))
+            tier2 = sum(1 for p in _CASINO_TIER2 if p.search(combined))
+            if tier1 + tier2 >= 2:
+                hits.append(key)
+            continue
+        if key == "betting":
+            tier1 = sum(3 for p in _BETTING_TIER1 if p.search(combined))
+            tier2 = sum(1 for p in _BETTING_TIER2 if p.search(combined))
+            if tier1 + tier2 >= 2:
                 hits.append(key)
             continue
         if key == "doorway":
@@ -548,9 +616,6 @@ def _detect_spam_topics(text: str, link_text: str = "", raw_html: str = "") -> l
 
         patterns = _SPAM_PATTERNS.get(key, [])
         score = _score_patterns(combined, patterns)
-
-        # bare \bsex\b alone scores 1 — needs a companion pattern (e.g. live sex,
-        # sex chat) to reach the threshold; single-word hits below threshold are ignored.
 
         if score >= SPAM_SCORE_THRESHOLD:
             hits.append(key)
@@ -615,7 +680,7 @@ def _fetch_snapshot_sample(
                 url,
                 headers=hdrs,
                 timeout=timeout,
-                allow_redirects=True,
+                allow_redirects=False,
                 stream=True,
                 **kwargs,
             )
@@ -640,6 +705,41 @@ def _fetch_snapshot_sample(
             resp.close()
 
             if not chunks:
+                # Redirect snapshot: body is empty because Wayback issued a redirect.
+                # Follow Location manually through Wayback so we get the destination content.
+                if 300 <= resp.status_code < 400:
+                    loc = resp.headers.get("Location") or resp.headers.get("location") or ""
+                    if loc:
+                        raw_loc = _normalize_wayback_location(loc)
+                        if raw_loc:
+                            redirect_url = f"https://web.archive.org/web/{ts}/{raw_loc}"
+                            try:
+                                r2 = _perform_request(
+                                    redirect_url,
+                                    headers=hdrs,
+                                    timeout=timeout,
+                                    allow_redirects=True,
+                                    stream=True,
+                                    **kwargs,
+                                )
+                                r2_ct = (r2.headers.get("Content-Type") or "").lower()
+                                if not r2_ct or "text" in r2_ct or "html" in r2_ct or "xml" in r2_ct:
+                                    r2_chunks = []
+                                    r2_total = 0
+                                    for chunk in r2.iter_content(chunk_size=8192):
+                                        if not chunk:
+                                            continue
+                                        r2_chunks.append(chunk)
+                                        r2_total += len(chunk)
+                                        if r2_total >= max_bytes:
+                                            break
+                                    r2.close()
+                                    if r2_chunks:
+                                        return b"".join(r2_chunks).decode(r2.encoding or "utf-8", errors="ignore")
+                                else:
+                                    r2.close()
+                            except Exception:
+                                pass
                 return ""
             data = b"".join(chunks)
             encoding = resp.encoding or "utf-8"
@@ -723,17 +823,22 @@ def _enrich_spam_flags(rows: list, headers: dict, req_kwargs: dict):
     propagate_threshold = float(current_app.config.get("ARCHIVE_SPAM_PROPAGATE_THRESHOLD", 0.7))
     propagate_threshold = max(0.0, min(propagate_threshold, 1.0))
 
-    eligible_total = 0
-    candidates = []
+    eligible = []
     for idx, (ts, orig, status, _redirect) in enumerate(rows):
         if not ts or not orig or not _is_spam_probe_candidate(status):
             continue
-        eligible_total += 1
-        if len(candidates) < max_probe:
-            candidates.append(idx)
+        eligible.append(idx)
 
-    if not candidates or max_probe == 0:
+    eligible_total = len(eligible)
+
+    if not eligible or max_probe == 0:
         return {}, 0, 0, eligible_total, {}, {}, [], {}
+
+    step = max(1, len(eligible) // max_probe)
+    candidates = [eligible[i] for i in range(0, len(eligible), step)][:max_probe]
+
+    tail = eligible[-3:]
+    candidates = sorted(set(candidates + tail))[:max_probe]
 
     hits_by_idx = {}
     sig_by_idx = {}
@@ -815,6 +920,7 @@ def _detect_topic_shifts(
 
     threshold = float(current_app.config.get("ARCHIVE_TOPIC_CHANGE_THRESHOLD", 0.18))
     min_chars = int(current_app.config.get("ARCHIVE_TOPIC_CHANGE_MIN_CHARS", 320))
+    only_flag_if_spam = bool(current_app.config.get("ARCHIVE_TOPIC_CHANGE_ONLY_IF_SPAM", True))
     threshold = max(0.02, min(threshold, 0.95))
     min_chars = max(80, min_chars)
 
@@ -832,8 +938,13 @@ def _detect_topic_shifts(
             last_sig = sig
             last_valid_idx = idx
             continue
+        # Guard: both the current and previous snapshot must meet min_chars
+        if lengths.get(last_valid_idx, 0) < min_chars:
+            last_sig = sig
+            last_valid_idx = idx
+            continue
         if _jaccard_similarity(sig, last_sig) < threshold:
-            if spam_hits_by_idx is not None:
+            if only_flag_if_spam and spam_hits_by_idx is not None:
                 current_hits = spam_hits_by_idx.get(idx, [])
                 prev_hits = spam_hits_by_idx.get(last_valid_idx, []) if last_valid_idx is not None else []
                 current_is_spam = bool(current_hits)

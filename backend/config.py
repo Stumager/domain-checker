@@ -22,8 +22,8 @@ class Config:
     # RDAP settings
     RDAP_BOOTSTRAP_URL = os.getenv("RDAP_BOOTSTRAP_URL", "https://data.iana.org/rdap/dns.json")
     FINAL_CHECK_ENABLED = os.getenv("FINAL_CHECK_ENABLED", "1") == "1"
-    FINAL_CHECK_WORKERS = int(os.getenv("FINAL_CHECK_WORKERS", "12"))
-    RDAP_TIMEOUT = float(os.getenv("RDAP_TIMEOUT", "4.0"))
+    FINAL_CHECK_WORKERS = int(os.getenv("FINAL_CHECK_WORKERS", "20"))
+    RDAP_TIMEOUT = float(os.getenv("RDAP_TIMEOUT", "7.0"))
     
     # Per-TLD overrides (JSON): {"com":"https://rdap.verisign.com/com/v1/","es":"https://rdap.nic.es/rdap/"}
     RDAP_TLD_OVERRIDES_JSON = os.getenv("RDAP_TLD_OVERRIDES", "").strip()
@@ -41,7 +41,7 @@ class Config:
     RDAP_FORBIDDEN_FALLBACK = os.getenv("RDAP_FORBIDDEN_FALLBACK", "1") == "1"
     RDAP_PARSE_ERROR_BODY = os.getenv("RDAP_PARSE_ERROR_BODY", "1") == "1"
     RDAP_RESTRICTED_ENABLE = os.getenv("RDAP_RESTRICTED_ENABLE", "1") == "1"
-    RDAP_RESTRICTED_TTL = float(os.getenv("RDAP_RESTRICTED_TTL", "3600"))
+    RDAP_RESTRICTED_TTL = float(os.getenv("RDAP_RESTRICTED_TTL", "600"))
 
     # WHOIS fallback tuning
     WHOIS_SERVER_OVERRIDES_JSON = os.getenv("WHOIS_SERVER_OVERRIDES", "").strip()
@@ -116,6 +116,10 @@ class Config:
     ARCHIVE_TLS_CHECK_ENABLED = os.getenv("ARCHIVE_TLS_CHECK_ENABLED", "1") == "1"
     ARCHIVE_TLS_TIMEOUT = float(os.getenv("ARCHIVE_TLS_TIMEOUT", "4"))
     ARCHIVE_NOT_SUITABLE_SCORE = int(os.getenv("ARCHIVE_NOT_SUITABLE_SCORE", "50"))
+    ARCHIVE_TOPIC_CHANGE_ONLY_IF_SPAM = os.getenv("ARCHIVE_TOPIC_CHANGE_ONLY_IF_SPAM", "1") == "1"
+    ARCHIVE_CJK_DENSITY_THRESHOLD = float(os.getenv("ARCHIVE_CJK_DENSITY_THRESHOLD", "0.25"))
+    ARCHIVE_CHINESE_DENSITY_THRESHOLD = float(os.getenv("ARCHIVE_CHINESE_DENSITY_THRESHOLD", "0.15"))
+    ARCHIVE_CJK_MIN_CHARS = int(os.getenv("ARCHIVE_CJK_MIN_CHARS", "10"))
 
 
 class DevelopmentConfig(Config):
