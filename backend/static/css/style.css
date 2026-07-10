@@ -904,11 +904,19 @@ button:focus-visible {
 }
 
 .archive-groq {
-    color: var(--ac-subtle, #6c7280);
     font-size: 11px;
     margin-top: 3px;
     cursor: default;
+}
+
+.archive-groq--ok {
+    color: #4ade80;
     font-style: italic;
+}
+
+.archive-groq--bad {
+    color: var(--warn, #f59e0b);
+    font-weight: 600;
 }
 
 /* ==============================================
