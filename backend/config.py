@@ -57,7 +57,7 @@ class Config:
     # Default TLDs for label expansion
     DEFAULT_TLDS = os.getenv("DEFAULT_TLDS", "es it pl fr de pt nl be se fi no dk tr in ca br mx co").strip()
     # TLDs where DNS prefilter is trusted; others treat unknown as RDAP candidates
-    DNS_PREFILTER_STRICT_TLDS = os.getenv("DNS_PREFILTER_STRICT_TLDS", "com in co mx").strip()
+    DNS_PREFILTER_STRICT_TLDS = os.getenv("DNS_PREFILTER_STRICT_TLDS", "com in co mx vn").strip()
 
     # Wayback archive settings
     ARCHIVE_YEAR_FROM = int(os.getenv("ARCHIVE_YEAR_FROM", "1998"))
@@ -116,6 +116,11 @@ class Config:
     ARCHIVE_TLS_CHECK_ENABLED = os.getenv("ARCHIVE_TLS_CHECK_ENABLED", "1") == "1"
     ARCHIVE_TLS_TIMEOUT = float(os.getenv("ARCHIVE_TLS_TIMEOUT", "4"))
     ARCHIVE_NOT_SUITABLE_SCORE = int(os.getenv("ARCHIVE_NOT_SUITABLE_SCORE", "50"))
+
+    # Groq LLM semantic classifier for Wayback snapshots
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
+    GROQ_TIMEOUT = float(os.getenv("GROQ_TIMEOUT", "8"))
 
 
 class DevelopmentConfig(Config):

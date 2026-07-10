@@ -25,6 +25,8 @@ hiddenimports = [
     'urllib3',
     'urllib3.util',
     'urllib3.util.retry',
+    # python-dotenv
+    'dotenv',
     # dnspython submodules (many are imported dynamically)
     'dns',
     'dns.resolver',
@@ -59,6 +61,9 @@ tmp_ret = collect_all('requests')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 tmp_ret = collect_all('certifi')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+tmp_ret = collect_all('dotenv')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 

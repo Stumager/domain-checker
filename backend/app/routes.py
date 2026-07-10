@@ -321,6 +321,7 @@ def get_archive_data():
                         merged.append(label)
                 row_spam = merged
 
+            groq_m = (metrics_by_idx or {}).get(idx, {})
             results.append({
                 "date": _fmt_ts(ts),
                 "status": status,
@@ -330,6 +331,8 @@ def get_archive_data():
                 "topic_shift": bool(topic_shifts.get(idx)),
                 "language_shift": bool(language_shifts.get(idx)),
                 "cloaking": bool(cloaking_flags.get(idx)),
+                "groq_topic": groq_m.get("groq_topic", ""),
+                "groq_reason": groq_m.get("groq_reason", ""),
             })
 
         reputation = _check_reputation(domain)

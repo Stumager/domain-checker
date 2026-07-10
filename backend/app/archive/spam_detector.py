@@ -13,6 +13,7 @@ from urllib.parse import urlsplit, unquote
 from flask import current_app
 
 from .fetcher import _perform_request
+from . import groq_classifier
 
 
 # ---------------------------------------------------------------------------
@@ -672,9 +673,22 @@ def _probe_snapshot_spam(
     sample = _fetch_snapshot_sample(ts, orig, headers, req_kwargs, timeout, max_bytes)
     visible_text, link_text, _combined, raw_html = _build_spam_haystacks(sample)
     hits = _detect_spam_topics(visible_text, link_text, raw_html)
+
+    groq_result: dict = {}
+    if groq_classifier.is_enabled():
+        groq_result = groq_classifier.classify_snapshot(visible_text)
+        groq_topic = groq_result.get("topic", "unknown")
+        if groq_result.get("is_bad") and groq_topic not in ("unknown", "error"):
+            if groq_topic not in hits:
+                hits = list(hits) + [groq_topic]
+
     signature, text_len = _build_topic_signature(visible_text, ngram, max_ngrams)
     base_domain = _extract_host_from_url(orig)
     metrics = _analyze_snapshot_content(visible_text, link_text, raw_html, base_domain)
+    if groq_result:
+        metrics["groq_topic"] = groq_result.get("topic", "")
+        metrics["groq_reason"] = groq_result.get("reason", "")
+        metrics["groq_is_bad"] = groq_result.get("is_bad", False)
     return hits, signature, text_len, metrics
 
 
@@ -713,6 +727,12 @@ def _enrich_spam_flags(rows: list, headers: dict, req_kwargs: dict):
 
     if not bool(current_app.config.get("ARCHIVE_SPAM_CHECK_ENABLED", True)):
         return {}, 0, 0, 0, {}, {}, [], {}
+
+    groq_classifier.set_config(
+        api_key=current_app.config.get("GROQ_API_KEY", ""),
+        model=current_app.config.get("GROQ_MODEL", "llama-3.1-8b-instant"),
+        timeout=float(current_app.config.get("GROQ_TIMEOUT", "8")),
+    )
 
     max_probe = max(int(current_app.config.get("ARCHIVE_SPAM_CHECK_MAX", 120)), 0)
     workers = max(int(current_app.config.get("ARCHIVE_SPAM_CHECK_WORKERS", 6)), 1)

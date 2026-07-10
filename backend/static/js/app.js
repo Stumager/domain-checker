@@ -448,7 +448,15 @@ function buildArchiveRowHtml(item) {
 
     let redirectCell = "";
     const spamLabels = formatSpamLabels(item.spam);
-    const spamHtml = spamLabels ? `<div class="archive-spam">SPAM: ${escapeHtml(spamLabels)}</div>` : "";
+    const groqReason = item.groq_reason || "";
+    const groqTopic  = item.groq_topic  || "";
+    const groqTitleAttr = groqReason ? ` title="Groq: ${escapeHtml(groqReason)}"` : "";
+    const spamHtml = spamLabels
+        ? `<div class="archive-spam"${groqTitleAttr}>SPAM: ${escapeHtml(spamLabels)}</div>`
+        : "";
+    const groqOkHtml = (!spamLabels && groqReason && groqTopic === "legit")
+        ? `<div class="archive-groq" title="${escapeHtml(groqReason)}">Groq: ok</div>`
+        : "";
     const topicHtml = item.topic_shift ? `<div class="archive-topic">Смена тематики</div>` : "";
     const languageHtml = item.language_shift ? `<div class="archive-topic">Смена языка</div>` : "";
     const cloakingHtml = item.cloaking ? `<div class="archive-cloaking">Клоакинг</div>` : "";
@@ -463,8 +471,8 @@ function buildArchiveRowHtml(item) {
             redirectHtml = `<div class="archive-redirect">${txt}</div>`;
         }
     }
-    if (redirectHtml || spamHtml || topicHtml || languageHtml || cloakingHtml) {
-        redirectCell = `<td class="archive-redirect-cell">${redirectHtml}${spamHtml}${topicHtml}${languageHtml}${cloakingHtml}</td>`;
+    if (redirectHtml || spamHtml || groqOkHtml || topicHtml || languageHtml || cloakingHtml) {
+        redirectCell = `<td class="archive-redirect-cell">${redirectHtml}${spamHtml}${groqOkHtml}${topicHtml}${languageHtml}${cloakingHtml}</td>`;
     } else {
         redirectCell = `<td></td>`;
     }

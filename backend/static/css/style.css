@@ -903,6 +903,14 @@ button:focus-visible {
     font-size: 12px;
 }
 
+.archive-groq {
+    color: var(--ac-subtle, #6c7280);
+    font-size: 11px;
+    margin-top: 3px;
+    cursor: default;
+    font-style: italic;
+}
+
 /* ==============================================
    Domain DB — Layout
    ============================================== */
