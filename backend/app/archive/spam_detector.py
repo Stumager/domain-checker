@@ -659,6 +659,16 @@ def _fetch_snapshot_sample(
     return sample
 
 
+def _stratify(indices: list, n: int) -> list:
+    """Pick n evenly-spaced elements from indices to cover the full time range."""
+    if not indices or n <= 0:
+        return []
+    if n >= len(indices):
+        return list(indices)
+    step = len(indices) / n
+    return [indices[int(i * step)] for i in range(n)]
+
+
 def _probe_snapshot_spam(
     ts: str,
     orig: str,
@@ -668,6 +678,7 @@ def _probe_snapshot_spam(
     max_bytes: int,
     ngram: int,
     max_ngrams: int,
+    run_groq: bool = False,
 ) -> tuple[list[str], set[str], int, dict]:
     """Return spam topics, n-gram signature, text length, and content metrics."""
     sample = _fetch_snapshot_sample(ts, orig, headers, req_kwargs, timeout, max_bytes)
@@ -675,7 +686,7 @@ def _probe_snapshot_spam(
     hits = _detect_spam_topics(visible_text, link_text, raw_html)
 
     groq_result: dict = {}
-    if groq_classifier.is_enabled():
+    if run_groq and groq_classifier.is_enabled():
         groq_result = groq_classifier.classify_snapshot(visible_text)
         groq_topic = groq_result.get("topic", "unknown")
         if groq_result.get("is_bad") and groq_topic not in ("unknown", "error"):
@@ -690,6 +701,20 @@ def _probe_snapshot_spam(
         metrics["groq_reason"] = groq_result.get("reason", "")
         metrics["groq_is_bad"] = groq_result.get("is_bad", False)
     return hits, signature, text_len, metrics
+
+
+def _probe_groq_only(
+    ts: str,
+    orig: str,
+    headers: dict,
+    req_kwargs: dict,
+    timeout: float,
+    max_bytes: int,
+) -> dict:
+    """Lightweight fetch + Groq classification only — no keyword spam check."""
+    sample = _fetch_snapshot_sample(ts, orig, headers, req_kwargs, timeout, max_bytes)
+    visible_text, _, _, _ = _build_spam_haystacks(sample)
+    return groq_classifier.classify_snapshot(visible_text)
 
 
 def _probe_snapshot_signature(
@@ -742,51 +767,94 @@ def _enrich_spam_flags(rows: list, headers: dict, req_kwargs: dict):
     max_ngrams = int(current_app.config.get("ARCHIVE_TOPIC_MAX_NGRAMS", 500))
     propagate_threshold = float(current_app.config.get("ARCHIVE_SPAM_PROPAGATE_THRESHOLD", 0.7))
     propagate_threshold = max(0.0, min(propagate_threshold, 1.0))
+    groq_max = max(int(current_app.config.get("GROQ_SNAPSHOT_MAX", 60)), 0)
 
-    eligible_total = 0
-    candidates = []
+    # Collect all eligible row indices (2xx/3xx status, non-empty ts+orig)
+    eligible_indices = []
     for idx, (ts, orig, status, _redirect) in enumerate(rows):
-        if not ts or not orig or not _is_spam_probe_candidate(status):
-            continue
-        eligible_total += 1
-        if len(candidates) < max_probe:
-            candidates.append(idx)
+        if ts and orig and _is_spam_probe_candidate(status):
+            eligible_indices.append(idx)
 
-    if not candidates or max_probe == 0:
+    eligible_total = len(eligible_indices)
+
+    # Spam check candidates: first N eligible (for keyword detection + topic signatures)
+    spam_candidates = eligible_indices[:max_probe] if max_probe > 0 else []
+
+    # Groq candidates: N rows evenly spread across the FULL time range
+    groq_enabled = groq_classifier.is_enabled() and groq_max > 0
+    groq_candidates = _stratify(eligible_indices, groq_max) if groq_enabled else []
+    groq_set = set(groq_candidates)
+    spam_set = set(spam_candidates)
+    # Rows that need Groq but fall outside the spam check window (need a separate fetch)
+    groq_only = [idx for idx in groq_candidates if idx not in spam_set]
+
+    if not spam_candidates and not groq_only:
         return {}, 0, 0, eligible_total, {}, {}, [], {}
 
     hits_by_idx = {}
     sig_by_idx = {}
     len_by_idx = {}
     metrics_by_idx = {}
-    with ThreadPoolExecutor(max_workers=min(workers, len(candidates))) as executor:
-        futures = {
-            executor.submit(
-                _probe_snapshot_spam,
-                rows[idx][0], rows[idx][1],
-                headers, req_kwargs,
-                timeout, max_bytes, ngram, max_ngrams,
-            ): idx
-            for idx in candidates
-        }
-        for future in as_completed(futures):
-            idx = futures[future]
-            try:
-                hits, sig, text_len, metrics = future.result()
-            except Exception:
-                hits, sig, text_len, metrics = [], set(), 0, {}
-            if hits:
-                hits_by_idx[idx] = hits
-            if sig:
-                sig_by_idx[idx] = sig
-            if text_len:
-                len_by_idx[idx] = text_len
-            if metrics:
-                metrics_by_idx[idx] = metrics
+
+    # Pass 1: spam keyword check; Groq runs here too for rows already in groq_set
+    if spam_candidates:
+        with ThreadPoolExecutor(max_workers=min(workers, len(spam_candidates))) as executor:
+            futures = {
+                executor.submit(
+                    _probe_snapshot_spam,
+                    rows[idx][0], rows[idx][1],
+                    headers, req_kwargs,
+                    timeout, max_bytes, ngram, max_ngrams,
+                    idx in groq_set,        # run_groq
+                ): idx
+                for idx in spam_candidates
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    hits, sig, text_len, metrics = future.result()
+                except Exception:
+                    hits, sig, text_len, metrics = [], set(), 0, {}
+                if hits:
+                    hits_by_idx[idx] = hits
+                if sig:
+                    sig_by_idx[idx] = sig
+                if text_len:
+                    len_by_idx[idx] = text_len
+                if metrics:
+                    metrics_by_idx[idx] = metrics
+
+    # Pass 2: Groq-only fetch for rows outside the spam check window
+    if groq_only:
+        with ThreadPoolExecutor(max_workers=min(workers, len(groq_only))) as executor:
+            futures = {
+                executor.submit(
+                    _probe_groq_only,
+                    rows[idx][0], rows[idx][1],
+                    headers, req_kwargs,
+                    timeout, max_bytes,
+                ): idx
+                for idx in groq_only
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    groq_result = future.result()
+                except Exception:
+                    groq_result = {"topic": "unknown", "is_bad": False, "reason": "groq_error"}
+                m = metrics_by_idx.setdefault(idx, {})
+                m["groq_topic"] = groq_result.get("topic", "")
+                m["groq_reason"] = groq_result.get("reason", "")
+                m["groq_is_bad"] = groq_result.get("is_bad", False)
+                g_topic = groq_result.get("topic", "unknown")
+                if groq_result.get("is_bad") and g_topic not in ("unknown", "error"):
+                    existing = hits_by_idx.get(idx, [])
+                    if g_topic not in existing:
+                        hits_by_idx[idx] = list(existing) + [g_topic]
 
     propagate_labels: list[str] = []
-    if hits_by_idx:
-        ratio = len(hits_by_idx) / max(len(candidates), 1)
+    if hits_by_idx and spam_candidates:
+        ratio = len(hits_by_idx) / max(len(spam_candidates), 1)
         if ratio >= propagate_threshold:
             union: set[str] = set()
             for vals in hits_by_idx.values():
@@ -795,7 +863,7 @@ def _enrich_spam_flags(rows: list, headers: dict, req_kwargs: dict):
                 propagate_labels = sorted(union)
 
     return (
-        hits_by_idx, len(candidates), len(hits_by_idx), eligible_total,
+        hits_by_idx, len(spam_candidates), len(hits_by_idx), eligible_total,
         sig_by_idx, len_by_idx, propagate_labels, metrics_by_idx,
     )
 

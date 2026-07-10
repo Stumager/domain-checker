@@ -121,6 +121,9 @@ class Config:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
     GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
     GROQ_TIMEOUT = float(os.getenv("GROQ_TIMEOUT", "8"))
+    # Max snapshots Groq analyzes per domain, evenly spread across the full time range.
+    # At 25 RPM free tier: 60 snapshots ≈ 2.5 min; 100 ≈ 4 min.
+    GROQ_SNAPSHOT_MAX = int(os.getenv("GROQ_SNAPSHOT_MAX", "60"))
 
 
 class DevelopmentConfig(Config):
