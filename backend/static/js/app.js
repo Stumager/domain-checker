@@ -1415,6 +1415,105 @@ function dbConfirmAddNew(btn) {
     showDbToast(`Added ${added.toLocaleString()} to .${tld}` + (skipped ? ` • ${skipped.toLocaleString()} skipped` : ""));
 }
 
+/* ================================================
+   DR Checker
+   ================================================ */
+
+let _drRunning = false;
+let _drStopped = false;
+let _drResults = [];
+
+function _drNormalize(raw) {
+    let s = (raw || "").trim();
+    s = s.replace(/^https?:\/\//i, "");
+    s = s.replace(/^www\./i, "");
+    s = s.split("/")[0].split("?")[0].split("#")[0].toLowerCase();
+    return s;
+}
+
+async function drStartCheck() {
+    if (_drRunning) return;
+    const lines = (document.getElementById("drInput").value || "")
+        .split("\n").map(_drNormalize).filter(Boolean);
+    if (!lines.length) { alert("Введите домены"); return; }
+
+    _drRunning = true;
+    _drStopped = false;
+    _drResults = [];
+
+    document.getElementById("drStartBtn").style.display = "none";
+    document.getElementById("drStopBtn").style.display = "block";
+    document.getElementById("drProgress").style.display = "block";
+    document.getElementById("drProgressText").textContent = "";
+    document.getElementById("drResultsSection").style.display = "block";
+    document.getElementById("drTableBody").innerHTML = "";
+    document.getElementById("drExportRow").style.display = "none";
+
+    for (let i = 0; i < lines.length; i++) {
+        if (_drStopped) break;
+        const domain = lines[i];
+        document.getElementById("drProgressText").textContent =
+            `Checking ${i + 1} / ${lines.length}: ${domain}`;
+
+        let drValue = "—";
+        try {
+            const r = await fetch("/api/dr-check", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ domain }),
+            });
+            if (r.status === 429) {
+                await new Promise(res => setTimeout(res, 5000));
+                const r2 = await fetch("/api/dr-check", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ domain }),
+                });
+                if (r2.ok) {
+                    const d2 = await r2.json();
+                    const v = d2?.domain_rating?.domain_rating;
+                    if (v !== undefined && v !== null) drValue = String(Math.round(v));
+                }
+            } else if (r.ok) {
+                const d = await r.json();
+                const v = d?.domain_rating?.domain_rating;
+                if (v !== undefined && v !== null) drValue = String(Math.round(v));
+            }
+        } catch (_) { /* network error → leave "—" */ }
+
+        _drResults.push({ domain, dr: drValue });
+        const tbody = document.getElementById("drTableBody");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${escapeHtml(domain)}</td><td>${escapeHtml(drValue)}</td>`;
+        tbody.appendChild(tr);
+
+        if (i === 0) document.getElementById("drExportRow").style.display = "block";
+
+        if (i < lines.length - 1 && !_drStopped) {
+            await new Promise(res => setTimeout(res, 300));
+        }
+    }
+
+    _drRunning = false;
+    document.getElementById("drStartBtn").style.display = "block";
+    document.getElementById("drStopBtn").style.display = "none";
+    document.getElementById("drProgressText").textContent = _drStopped
+        ? `Stopped at ${_drResults.length} / ${lines.length}`
+        : `Done: ${_drResults.length} domain(s)`;
+}
+
+function drStop() { _drStopped = true; }
+
+function drExportCsv() {
+    const today = new Date().toISOString().slice(0, 10);
+    let csv = "domain,dr\n";
+    for (const row of _drResults) csv += `${row.domain},${row.dr}\n`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `dr-export-${today}.csv`;
+    a.click();
+}
+
 window.addEventListener("DOMContentLoaded", () => {
     const textarea = document.getElementById("domainsInput");
     const dropHint = document.getElementById("dropHint");
@@ -1502,6 +1601,14 @@ window.addEventListener("DOMContentLoaded", () => {
 
     dbSetupDropZone();
     updateDbTabCount();
+
+    const drInputEl = document.getElementById("drInput");
+    if (drInputEl) {
+        drInputEl.addEventListener("input", () => {
+            const n = drInputEl.value.split("\n").filter(l => l.trim()).length;
+            document.getElementById("drCount").textContent = n;
+        });
+    }
 
     ensureBrowserSessionId();
     window.addEventListener("pagehide", disconnectServer);

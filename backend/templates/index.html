@@ -21,6 +21,7 @@
                 Domain DB
                 <span class="tab-db-count" id="tabDbCount"></span>
             </button>
+            <button type="button" class="tab-btn" data-tab="drchecker">DR Checker</button>
         </div>
 
         <!-- Tab: Domain Checker -->
@@ -233,6 +234,38 @@
                     </div>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- Tab: DR Checker -->
+        <div class="tab-panel" id="tab-drchecker">
+            <div class="content">
+                <div class="form-group">
+                    <label>Domains (<span id="drCount">0</span>)</label>
+                    <textarea id="drInput" placeholder="One domain per line"></textarea>
+                </div>
+                <div class="buttons">
+                    <button type="button" class="btn-primary" id="drStartBtn" onclick="drStartCheck()">Check DR</button>
+                    <button type="button" class="btn-stop" id="drStopBtn" onclick="drStop()" style="display:none">Stop</button>
+                </div>
+                <div id="drProgress" style="display:none; margin-top:8px; color:var(--text-muted, #9ca3af)">
+                    <span id="drProgressText"></span>
+                </div>
+                <div id="drResultsSection" style="display:none; margin-top:16px">
+                    <div id="drExportRow" style="display:none; margin-bottom:10px">
+                        <button type="button" class="btn-primary" onclick="drExportCsv()">Export CSV</button>
+                    </div>
+                    <table class="archive-table" id="drTable">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>DR</th>
+                            </tr>
+                        </thead>
+                        <tbody id="drTableBody"></tbody>
+                    </table>
+                    <div class="dr-attribution">Domain Rating by <a href="https://ahrefs.com" target="_blank" rel="noopener noreferrer">Ahrefs (ahrefs.com)</a></div>
+                </div>
             </div>
         </div>
 

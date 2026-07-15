@@ -377,3 +377,22 @@ def get_archive_data():
         return jsonify(_empty_error("Wayback request timed out."))
     except Exception as exc:
         return jsonify(_empty_error(f"Wayback request failed: {str(exc)}"))
+
+
+@api_bp.route("/dr-check", methods=["POST"])
+def dr_check():
+    domain = (request.json or {}).get("domain", "").strip()
+    if not domain:
+        return jsonify({"error": "no domain"}), 400
+    try:
+        resp = requests.get(
+            "https://api.ahrefs.com/v3/public/domain-rating-free",
+            params={"target": domain},
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        return jsonify(resp.json()), resp.status_code
+    except requests.Timeout:
+        return jsonify({"error": "timeout"}), 502
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
