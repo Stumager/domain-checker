@@ -1422,6 +1422,8 @@ function dbConfirmAddNew(btn) {
 let _drRunning = false;
 let _drStopped = false;
 let _drResults = [];
+let drSortState = 0;
+let drOriginalRows = [];
 
 function _drNormalize(raw) {
     let s = (raw || "").trim();
@@ -1446,7 +1448,7 @@ async function drStartCheck() {
     document.getElementById("drProgress").style.display = "block";
     document.getElementById("drProgressText").textContent = "";
     document.getElementById("drResultsSection").style.display = "block";
-    document.getElementById("drTableBody").innerHTML = "";
+    document.getElementById("drTbody").innerHTML = "";
     document.getElementById("drExportRow").style.display = "none";
 
     for (let i = 0; i < lines.length; i++) {
@@ -1482,10 +1484,11 @@ async function drStartCheck() {
         } catch (_) { /* network error → leave "—" */ }
 
         _drResults.push({ domain, dr: drValue });
-        const tbody = document.getElementById("drTableBody");
+        const tbody = document.getElementById("drTbody");
         const tr = document.createElement("tr");
         tr.innerHTML = `<td>${escapeHtml(domain)}</td><td>${escapeHtml(drValue)}</td>`;
         tbody.appendChild(tr);
+        drOriginalRows = Array.from(document.getElementById("drTbody").rows);
 
         if (i === 0) document.getElementById("drExportRow").style.display = "block";
 
@@ -1505,12 +1508,18 @@ async function drStartCheck() {
 function drStop() { _drStopped = true; }
 
 function drExportCsv() {
-    const today = new Date().toISOString().slice(0, 10);
-    let csv = "domain,dr\n";
-    for (const row of _drResults) csv += `${row.domain},${row.dr}\n`;
+    const rows = [["domain", "dr"]];
+    Array.from(document.getElementById("drTbody").rows).forEach(r => {
+        const domain = r.cells[0].textContent.trim();
+        const dr = r.cells[1].textContent.trim();
+        rows.push([domain, dr === "—" ? "" : dr]);
+    });
+    const csv = rows.map(r => r.join(";")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const date = new Date().toISOString().slice(0, 10);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `dr-export-${today}.csv`;
+    a.href = URL.createObjectURL(blob);
+    a.download = `dr-export-${date}.csv`;
     a.click();
 }
 
@@ -1609,6 +1618,24 @@ window.addEventListener("DOMContentLoaded", () => {
             document.getElementById("drCount").textContent = n;
         });
     }
+
+    document.getElementById("drSortBtn").addEventListener("click", () => {
+        drSortState = (drSortState + 1) % 3;
+        const icons = ["⇅", "↓", "↑"];
+        document.getElementById("drSortIcon").textContent = icons[drSortState];
+        const tbody = document.getElementById("drTbody");
+        if (drSortState === 0) {
+            drOriginalRows.forEach(r => tbody.appendChild(r));
+            return;
+        }
+        const rows = Array.from(tbody.rows);
+        rows.sort((a, b) => {
+            const av = parseFloat(a.cells[1].textContent) || -1;
+            const bv = parseFloat(b.cells[1].textContent) || -1;
+            return drSortState === 1 ? bv - av : av - bv;
+        });
+        rows.forEach(r => tbody.appendChild(r));
+    });
 
     ensureBrowserSessionId();
     window.addEventListener("pagehide", disconnectServer);
