@@ -102,9 +102,51 @@ def create_app(config=None):
     }
     services.rdap_service.set_config(rdap_config)
 
+    _init_maps_module(app)
+
     from .routes import api_bp, web_bp
 
     app.register_blueprint(web_bp)
     app.register_blueprint(api_bp)
 
+    from .auth import register_auth
+    from .maps_routes import maps_bp
+
+    app.register_blueprint(maps_bp)
+    register_auth(app)
+
     return app
+
+
+def _init_maps_module(app: Flask):
+    """Поднять БД и настроить сервисы модуля Maps."""
+    from . import db
+    from .services import geo_data, maps_service, proxy_service
+
+    db.configure(app.config.get("MAPS_DB_PATH", ""))
+    db.init_db()
+
+    geo_data.set_config({
+        "NOMINATIM_URL": app.config.get("NOMINATIM_URL"),
+        "NOMINATIM_USER_AGENT": app.config.get("NOMINATIM_USER_AGENT"),
+        "NOMINATIM_TIMEOUT": app.config.get("NOMINATIM_TIMEOUT"),
+    })
+    maps_service.set_config({
+        "GMAPS_API_URL": app.config.get("GMAPS_API_URL"),
+        "GMAPS_TIMEOUT": app.config.get("GMAPS_TIMEOUT"),
+        "GMAPS_DOWNLOAD_TIMEOUT": app.config.get("GMAPS_DOWNLOAD_TIMEOUT"),
+        "GMAPS_POLL_INTERVAL": app.config.get("GMAPS_POLL_INTERVAL"),
+        "GMAPS_MAX_TIME": app.config.get("GMAPS_MAX_TIME"),
+    })
+    proxy_service.set_config({
+        "PROXY_CHECK_URL": app.config.get("PROXY_CHECK_URL"),
+        "PROXY_CHECK_TIMEOUT": app.config.get("PROXY_CHECK_TIMEOUT"),
+        "PROXY_CHECK_WORKERS": app.config.get("PROXY_CHECK_WORKERS"),
+    })
+
+    # Справочник языков грузится ~6 секунд, поэтому греем его в фоне
+    if not app.config.get("TESTING"):
+        geo_data.start_language_warmup()
+
+    # Потоки поллинга не переживают рестарт — снимаем зависший статус running
+    maps_service.reset_stale_jobs()

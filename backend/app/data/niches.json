@@ -1,0 +1,22 @@
+[
+    { "value": "restaurants",        "label": "Restaurants" },
+    { "value": "hotels",             "label": "Hotels" },
+    { "value": "dentists",           "label": "Dentists" },
+    { "value": "lawyers",            "label": "Lawyers" },
+    { "value": "gyms",               "label": "Gyms" },
+    { "value": "cafes",              "label": "Cafes" },
+    { "value": "bars",               "label": "Bars" },
+    { "value": "hair salons",        "label": "Hair salons" },
+    { "value": "beauty salons",      "label": "Beauty salons" },
+    { "value": "car repair",         "label": "Car repair" },
+    { "value": "car dealers",        "label": "Car dealers" },
+    { "value": "real estate agents", "label": "Real estate agents" },
+    { "value": "plumbers",           "label": "Plumbers" },
+    { "value": "electricians",       "label": "Electricians" },
+    { "value": "veterinarians",      "label": "Veterinarians" },
+    { "value": "pharmacies",         "label": "Pharmacies" },
+    { "value": "doctors",            "label": "Doctors" },
+    { "value": "accountants",        "label": "Accountants" },
+    { "value": "driving schools",    "label": "Driving schools" },
+    { "value": "travel agencies",    "label": "Travel agencies" }
+]

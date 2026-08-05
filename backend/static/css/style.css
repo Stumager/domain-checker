@@ -256,6 +256,7 @@ label {
 
 input[type="number"],
 input[type="text"],
+input[type="password"],
 textarea,
 select {
     width: 100%;
@@ -274,6 +275,7 @@ select {
 
 input[type="number"]:focus,
 input[type="text"]:focus,
+input[type="password"]:focus,
 textarea:focus,
 select:focus {
     border-color: var(--ac);
@@ -1643,3 +1645,274 @@ button:focus-visible {
 /* DR Checker */
 .dr-attribution { margin-top: 12px; font-size: 11px; color: var(--text-muted, #6b7280); }
 .dr-attribution a { color: inherit; text-decoration: underline; }
+
+/* ==============================================
+   Maps Scraper
+   ============================================== */
+.maps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.maps-grid .form-group { margin-bottom: 0; }
+
+.maps-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.maps-toggle-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ac);
+    cursor: pointer;
+}
+
+.maps-toggle-link:hover { color: var(--ach); }
+
+/* Status bar */
+.maps-status-bar {
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 18px;
+    background: var(--s1);
+    border: 1px solid var(--br);
+    border-radius: var(--r);
+}
+
+.maps-status-bar.active { display: flex; }
+
+.maps-status-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--t3);
+    padding-right: 12px;
+    border-right: 1px solid var(--br);
+}
+
+.maps-status-item:last-child { border-right: none; padding-right: 0; }
+
+.maps-status-item b {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--t1);
+}
+
+.maps-status-item b.is-running { color: var(--ok); }
+.maps-status-item b.is-stopped { color: var(--t2); }
+.maps-status-item b.is-error   { color: var(--err); }
+
+/* Collapsible sections */
+.maps-collapsible {
+    border: 1px solid var(--br);
+    border-radius: var(--r);
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.maps-collapsible-head {
+    width: 100%;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--s1);
+    color: var(--t2);
+    font-size: 13px;
+    border-radius: 0;
+}
+
+.maps-collapsible-head:hover { color: var(--t1); }
+
+.maps-collapsible-head .maps-caret {
+    transition: transform 150ms ease;
+    font-size: 10px;
+}
+
+.maps-collapsible.open .maps-caret { transform: rotate(180deg); }
+
+.maps-collapsible-body {
+    display: none;
+    padding: 14px 12px;
+    border-top: 1px solid var(--br);
+}
+
+.maps-collapsible.open .maps-collapsible-body { display: block; }
+
+/* Proxy panel */
+.maps-proxy-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.maps-proxy-table-wrap {
+    margin-top: 14px;
+    overflow-x: auto;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--mono);
+}
+
+.status-badge.working { background: var(--ok-subtle);  color: var(--ok); }
+.status-badge.failed  { background: var(--err-subtle); color: var(--err); }
+.status-badge.unknown { background: var(--s3);         color: var(--t2); }
+
+.maps-row-btn {
+    background: transparent;
+    border: 1px solid var(--br);
+    color: var(--t3);
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: var(--r-sm);
+}
+
+.maps-row-btn:hover { border-color: var(--err); color: var(--err); }
+
+/* Results */
+.maps-results { margin-top: 20px; }
+
+.maps-filter-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.maps-filter-row input { flex: 1 1 200px; }
+.maps-filter-row select { flex: 0 0 150px; }
+
+.maps-table-wrap { overflow-x: auto; }
+
+.maps-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--t3);
+}
+
+.maps-export-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.maps-empty {
+    padding: 24px 12px;
+    text-align: center;
+    color: var(--t3);
+    font-size: 13px;
+}
+
+.maps-error {
+    display: none;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border-radius: var(--r);
+    background: var(--err-subtle);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    color: var(--err);
+    font-size: 12.5px;
+}
+
+.maps-error.active { display: block; }
+
+/* ==============================================
+   Login page
+   ============================================== */
+.login-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px 16px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 360px;
+    background: var(--s1);
+    border: 1px solid var(--br);
+    border-radius: var(--r-xl);
+    padding: 28px;
+}
+
+.login-head { margin-bottom: 22px; }
+
+.login-head h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--t1);
+    letter-spacing: -0.2px;
+    margin-bottom: 4px;
+}
+
+.login-head p {
+    font-size: 13px;
+    color: var(--t3);
+}
+
+.login-submit {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.login-error {
+    display: none;
+    margin-bottom: 14px;
+    padding: 9px 11px;
+    border-radius: var(--r);
+    background: var(--err-subtle);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    color: var(--err);
+    font-size: 12.5px;
+}
+
+.login-error.active { display: block; }
+
+.login-toggle {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--t3);
+}
+
+.login-link {
+    background: none;
+    border: none;
+    padding: 0 0 0 4px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ac);
+    cursor: pointer;
+}
+
+.login-link:hover { color: var(--ach); }
+
+@media (max-width: 640px) {
+    .maps-filter-row select { flex: 1 1 100%; }
+    .maps-status-item {
+        border-right: none;
+        padding-right: 0;
+    }
+}

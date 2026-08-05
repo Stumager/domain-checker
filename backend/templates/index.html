@@ -13,6 +13,7 @@
         <div class="header">
             <h1>Domain Checker</h1>
             <p>DNS prefilter (NS/SOA) · RDAP verify · Web Archive history</p>
+            <button type="button" class="maps-toggle-link" id="logoutBtn" onclick="authLogout()">Sign out</button>
         </div>
 
         <div class="tab-nav">
@@ -22,6 +23,7 @@
                 <span class="tab-db-count" id="tabDbCount"></span>
             </button>
             <button type="button" class="tab-btn" data-tab="drchecker">DR Checker</button>
+            <button type="button" class="tab-btn" data-tab="maps">Maps</button>
         </div>
 
         <!-- Tab: Domain Checker -->
@@ -266,6 +268,181 @@
                     </table>
                     <div class="dr-attribution">Domain Rating by <a href="https://ahrefs.com" target="_blank" rel="noopener noreferrer">Ahrefs (ahrefs.com)</a></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Tab: Maps Scraper -->
+        <div class="tab-panel" id="tab-maps">
+            <div class="content">
+
+                <div class="maps-error" id="mapsError"></div>
+
+                <!-- 1. Main inputs -->
+                <div class="maps-grid">
+                    <div class="form-group">
+                        <div class="maps-label-row">
+                            <label for="mapsNiche">Niche</label>
+                            <button type="button" class="maps-toggle-link" id="mapsNicheToggle"
+                                    onclick="mapsOnNicheChange()">manual</button>
+                        </div>
+                        <select id="mapsNiche" title="Business category used to build the search query"></select>
+                        <input type="text" id="mapsNicheManual" style="display:none"
+                               placeholder="Type a niche…"
+                               title="Free-text niche — used instead of the dropdown">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mapsCountry">Country</label>
+                        <select id="mapsCountry" title="Country from the bundled dataset"
+                                onchange="mapsOnCountryChange()"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mapsCity">City</label>
+                        <select id="mapsCity" title="City — the bounding box is resolved via Nominatim"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mapsLanguage">Language</label>
+                        <input type="text" id="mapsLanguage" maxlength="2"
+                               placeholder="en"
+                               title="Two-letter language code sent to Google Maps. Auto-filled from the country, editable.">
+                    </div>
+                </div>
+
+                <!-- 2. TLD filter + controls -->
+                <div class="form-group">
+                    <label for="mapsTldFilter">TLD filter</label>
+                    <input type="text" id="mapsTldFilter" placeholder="es, it, com — leave empty to keep all"
+                           title="Only keep discovered domains ending with these TLDs. Empty = keep everything.">
+                    <div class="input-hint">Comma- or space-separated. Applied to every scrape cycle before saving.</div>
+                </div>
+
+                <div class="buttons">
+                    <button type="button" class="btn-primary" id="mapsStartBtn" onclick="mapsStartJob()">Start scraping</button>
+                    <button type="button" class="btn-stop" id="mapsStopBtn" onclick="mapsStopJob()" style="display:none">Stop</button>
+                </div>
+
+                <!-- 3. Status bar -->
+                <div class="maps-status-bar" id="mapsStatusBar">
+                    <div class="maps-status-item">Status <b id="mapsStatStatus">—</b></div>
+                    <div class="maps-status-item">Cycles <b id="mapsStatCycles">0</b></div>
+                    <div class="maps-status-item">Domains found <b id="mapsStatDomains">0</b></div>
+                    <div class="maps-status-item">Last run <b id="mapsStatTime">—</b></div>
+                </div>
+
+                <!-- 4. Advanced settings -->
+                <div class="maps-collapsible" id="mapsAdvanced">
+                    <button type="button" class="maps-collapsible-head" onclick="mapsToggleSection('mapsAdvanced')">
+                        <span>Advanced Settings</span><span class="maps-caret">▼</span>
+                    </button>
+                    <div class="maps-collapsible-body">
+                        <div class="maps-grid">
+                            <div class="form-group">
+                                <label for="mapsDepth">depth</label>
+                                <input type="number" id="mapsDepth" value="10" min="1" max="100"
+                                       title="How far to scroll the Google Maps results list. Higher = more places, slower run.">
+                            </div>
+                            <div class="form-group">
+                                <label for="mapsConcurrency">concurrency</label>
+                                <input type="number" id="mapsConcurrency" value="4" min="1" max="64"
+                                       title="Parallel scraper workers. Stored with the job; the gmaps web API currently ignores it (CLI-only flag).">
+                            </div>
+                            <div class="form-group">
+                                <label for="mapsGridCell">grid_cell</label>
+                                <input type="number" id="mapsGridCell" value="1.0" min="0.1" step="0.1"
+                                       title="Grid cell size in km used to split the bounding box. Stored with the job; the gmaps web API currently ignores it (CLI-only flag).">
+                            </div>
+                            <div class="form-group">
+                                <label for="mapsZoom">zoom</label>
+                                <input type="number" id="mapsZoom" value="15" min="0" max="21"
+                                       title="Google Maps zoom level (0–21). Lower zoom covers more area with less detail.">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="mapsCustomQuery">custom_query override</label>
+                            <input type="text" id="mapsCustomQuery" placeholder="e.g. vegan restaurants in Madrid"
+                                   title="Replaces the generated “{niche} in {city}” query entirely. Leave empty to use the generated one.">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Proxy settings -->
+                <div class="maps-collapsible" id="mapsProxies">
+                    <button type="button" class="maps-collapsible-head" onclick="mapsToggleSection('mapsProxies')">
+                        <span>Proxy Settings</span><span class="maps-caret">▼</span>
+                    </button>
+                    <div class="maps-collapsible-body">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="mapsProxyInput">Add proxies</label>
+                            <textarea id="mapsProxyInput" style="height:96px"
+                                      placeholder="One per line — ip:port, ip:port:user:pass or http://user:pass@ip:port"></textarea>
+                        </div>
+                        <div class="maps-proxy-actions">
+                            <button type="button" class="btn-primary" onclick="mapsAddProxies()">Add</button>
+                            <button type="button" class="btn-indigo" id="mapsCheckProxiesBtn" onclick="mapsCheckProxies()">Check All</button>
+                        </div>
+                        <div class="maps-proxy-table-wrap">
+                            <table class="archive-table">
+                                <thead>
+                                    <tr>
+                                        <th>Proxy</th>
+                                        <th>Status</th>
+                                        <th>Last Checked</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mapsProxyTbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Results -->
+                <div class="maps-results">
+                    <div class="db-sub-tabs">
+                        <button type="button" class="db-sub-tab active" data-mapstab="domains"
+                                onclick="mapsSwitchSubTab('domains')">
+                            Domains (<span id="mapsDomainsCount">0</span>)
+                        </button>
+                        <button type="button" class="db-sub-tab" data-mapstab="export"
+                                onclick="mapsSwitchSubTab('export')">Export</button>
+                    </div>
+
+                    <div id="mapsDomainsPane">
+                        <div class="maps-filter-row">
+                            <input type="text" id="mapsSearch" placeholder="Search domain or business…">
+                            <select id="mapsTldSelect" title="Filter the saved results by TLD"></select>
+                        </div>
+                        <div class="maps-table-wrap">
+                            <table class="archive-table">
+                                <thead>
+                                    <tr>
+                                        <th>Domain</th>
+                                        <th>Business</th>
+                                        <th>Country</th>
+                                        <th>City</th>
+                                        <th>Niche</th>
+                                        <th>Discovered</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mapsDomainsTbody"></tbody>
+                            </table>
+                        </div>
+                        <div class="maps-pagination" id="mapsPagination"></div>
+                    </div>
+
+                    <div id="mapsExportPane" style="display:none">
+                        <div class="input-hint" style="margin-bottom:10px">
+                            Exports every domain matching the current search and TLD filter.
+                        </div>
+                        <div class="maps-export-row">
+                            <button type="button" class="btn-primary" onclick="mapsExportTxt()">Export TXT</button>
+                            <button type="button" class="btn-primary" onclick="mapsExportCsv()">Export CSV</button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 

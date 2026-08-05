@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Checker — Sign in</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-body">
+
+    <div class="login-card">
+        <div class="login-head">
+            <h1>Domain Checker</h1>
+            <p id="loginSubtitle">Sign in to continue</p>
+        </div>
+
+        <form id="loginForm" autocomplete="on">
+            <div class="form-group">
+                <label for="loginEmail">Email</label>
+                <input type="text" id="loginEmail" autocomplete="username" placeholder="admin@checker.local">
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" autocomplete="current-password" placeholder="Your password">
+            </div>
+
+            <div class="login-error" id="loginError"></div>
+
+            <button type="submit" class="btn-primary login-submit" id="loginSubmit">Sign in</button>
+        </form>
+
+        <div class="login-toggle">
+            <span id="loginToggleText">No account yet?</span>
+            <button type="button" class="login-link" id="loginToggleBtn">Create one</button>
+        </div>
+    </div>
+
+    <script>
+        // Heartbeat: без него BrowserMonitor решит, что вкладок нет, и закроет приложение
+        (function keepAlive() {
+            const sessionId = (window.crypto && window.crypto.randomUUID)
+                ? window.crypto.randomUUID()
+                : "login-" + Date.now();
+            const ping = () => {
+                fetch("/api/ping?session=" + encodeURIComponent(sessionId), {
+                    method: "POST",
+                    cache: "no-cache"
+                }).catch(() => {});
+            };
+            ping();
+            setInterval(ping, 3000);
+        })();
+
+        let loginMode = "login";
+
+        function setLoginMode(mode) {
+            loginMode = mode;
+            const isLogin = mode === "login";
+            document.getElementById("loginSubtitle").textContent =
+                isLogin ? "Sign in to continue" : "Create an account";
+            document.getElementById("loginSubmit").textContent =
+                isLogin ? "Sign in" : "Create account";
+            document.getElementById("loginToggleText").textContent =
+                isLogin ? "No account yet?" : "Already have an account?";
+            document.getElementById("loginToggleBtn").textContent =
+                isLogin ? "Create one" : "Sign in";
+            document.getElementById("loginPassword").setAttribute(
+                "autocomplete", isLogin ? "current-password" : "new-password");
+            showLoginError("");
+        }
+
+        function showLoginError(message) {
+            const el = document.getElementById("loginError");
+            el.textContent = message || "";
+            el.classList.toggle("active", Boolean(message));
+        }
+
+        document.getElementById("loginToggleBtn").addEventListener("click", () => {
+            setLoginMode(loginMode === "login" ? "register" : "login");
+        });
+
+        document.getElementById("loginForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const email = document.getElementById("loginEmail").value.trim();
+            const password = document.getElementById("loginPassword").value;
+            if (!email || !password) {
+                showLoginError("Enter your email and password");
+                return;
+            }
+
+            const button = document.getElementById("loginSubmit");
+            button.disabled = true;
+            showLoginError("");
+
+            try {
+                const resp = await fetch("/api/auth/" + loginMode, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await resp.json().catch(() => ({}));
+
+                if (!resp.ok) {
+                    showLoginError(data.error || "Sign-in failed");
+                    button.disabled = false;
+                    return;
+                }
+
+                window.location.reload();
+            } catch (e) {
+                showLoginError("Network error: " + e.message);
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

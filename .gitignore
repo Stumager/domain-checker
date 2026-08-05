@@ -65,6 +65,11 @@ taken.txt
 invalid.txt
 errors.txt
 
+# Runtime SQLite databases
+*.db
+*.db-wal
+*.db-shm
+
 # Internal dev notes
 PROGRESS.md
 

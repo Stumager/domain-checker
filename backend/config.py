@@ -117,6 +117,36 @@ class Config:
     ARCHIVE_TLS_TIMEOUT = float(os.getenv("ARCHIVE_TLS_TIMEOUT", "4"))
     ARCHIVE_NOT_SUITABLE_SCORE = int(os.getenv("ARCHIVE_NOT_SUITABLE_SCORE", "50"))
 
+    # Maps Scraper (gosom/google-maps-scraper)
+    GMAPS_API_URL = os.getenv("GMAPS_API_URL", "http://localhost:8090")
+    GMAPS_TIMEOUT = float(os.getenv("GMAPS_TIMEOUT", "20"))
+    GMAPS_DOWNLOAD_TIMEOUT = float(os.getenv("GMAPS_DOWNLOAD_TIMEOUT", "120"))
+    # Как часто фоновый поток опрашивает статус задачи в gmaps
+    GMAPS_POLL_INTERVAL = float(os.getenv("GMAPS_POLL_INTERVAL", "30"))
+    # max_time обязателен для gmaps API (в секундах)
+    GMAPS_MAX_TIME = int(os.getenv("GMAPS_MAX_TIME", "600"))
+    GMAPS_DEFAULT_DEPTH = int(os.getenv("GMAPS_DEFAULT_DEPTH", "10"))
+    GMAPS_DEFAULT_ZOOM = int(os.getenv("GMAPS_DEFAULT_ZOOM", "15"))
+    GMAPS_DEFAULT_CONCURRENCY = int(os.getenv("GMAPS_DEFAULT_CONCURRENCY", "4"))
+    GMAPS_DEFAULT_GRID_CELL = float(os.getenv("GMAPS_DEFAULT_GRID_CELL", "1.0"))
+
+    # Nominatim (bbox по городу)
+    NOMINATIM_URL = os.getenv("NOMINATIM_URL", "https://nominatim.openstreetmap.org/search").strip()
+    NOMINATIM_USER_AGENT = os.getenv("NOMINATIM_USER_AGENT", "DomainChecker/1.0").strip()
+    NOMINATIM_TIMEOUT = float(os.getenv("NOMINATIM_TIMEOUT", "15"))
+
+    # Проверка прокси
+    PROXY_CHECK_URL = os.getenv("PROXY_CHECK_URL", "https://www.google.com").strip()
+    PROXY_CHECK_TIMEOUT = float(os.getenv("PROXY_CHECK_TIMEOUT", "10"))
+    PROXY_CHECK_WORKERS = int(os.getenv("PROXY_CHECK_WORKERS", "8"))
+
+    # SQLite для модуля Maps и учётных записей. Пусто -> backend/data/maps.db
+    MAPS_DB_PATH = os.getenv("MAPS_DB_PATH", "").strip()
+
+    # Учётка, создаваемая при первом запуске
+    SEED_ADMIN_EMAIL = os.getenv("SEED_ADMIN_EMAIL", "admin@checker.local").strip()
+    SEED_ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+
     # Groq LLM semantic classifier for Wayback snapshots
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
     GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()

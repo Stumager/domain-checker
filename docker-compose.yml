@@ -1,0 +1,17 @@
+services:
+  gmaps-scraper:
+    image: gosom/google-maps-scraper
+    container_name: gmaps-scraper
+    # ENTRYPOINT образа — сам бинарник, поэтому здесь только его аргументы.
+    # Без -data-folder веб-режим (REST API на :8080) не поднимается.
+    command: ["-data-folder", "/gmapsdata", "-cache", "/gmapscache"]
+    ports:
+      - "8090:8080"
+    volumes:
+      - gmaps-cache:/gmapscache
+      - gmaps-data:/gmapsdata
+    restart: unless-stopped
+
+volumes:
+  gmaps-cache:
+  gmaps-data:

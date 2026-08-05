@@ -1089,6 +1089,7 @@ function switchTab(tabName) {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tabName));
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + tabName));
     if (tabName === "domaindb") renderDbSidebar();
+    if (tabName === "maps") mapsInit();
 }
 
 function renderDbSidebar() {
@@ -1653,3 +1654,448 @@ window.addEventListener("DOMContentLoaded", () => {
     pingInterval = setInterval(pingServer, 3000);
     pingServer();
 });
+
+// -----------------------------------------------------------------------------
+// Maps Scraper
+// -----------------------------------------------------------------------------
+
+const MAPS_PAGE_SIZE = 50;
+
+let mapsGeo = [];
+let mapsNiches = [];
+let mapsInitStarted = false;
+let mapsStatusTimer = null;
+let mapsSearchTimer = null;
+let mapsPage = 1;
+let mapsTotalPages = 0;
+let mapsNicheManual = false;
+let mapsIsRunning = false;
+let mapsLastDomainCount = -1;
+
+function mapsShowError(message) {
+    const el = document.getElementById("mapsError");
+    if (!el) return;
+    el.textContent = message || "";
+    el.classList.toggle("active", Boolean(message));
+}
+
+function mapsToggleSection(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("open");
+}
+
+function mapsSwitchSubTab(name) {
+    document.querySelectorAll("[data-mapstab]").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.mapstab === name);
+    });
+    const domainsPane = document.getElementById("mapsDomainsPane");
+    const exportPane = document.getElementById("mapsExportPane");
+    if (domainsPane) domainsPane.style.display = name === "domains" ? "block" : "none";
+    if (exportPane) exportPane.style.display = name === "export" ? "block" : "none";
+}
+
+async function mapsInit() {
+    if (mapsInitStarted) return;
+    mapsInitStarted = true;
+
+    await mapsLoadGeo();
+    mapsLoadProxies();
+    mapsLoadDomains(1);
+    mapsStatusPoll();
+
+    if (!mapsStatusTimer) {
+        mapsStatusTimer = setInterval(mapsStatusPoll, 10000);
+    }
+
+    const search = document.getElementById("mapsSearch");
+    if (search) {
+        search.addEventListener("input", () => {
+            clearTimeout(mapsSearchTimer);
+            mapsSearchTimer = setTimeout(() => mapsLoadDomains(1), 300);
+        });
+    }
+
+    const tldSelect = document.getElementById("mapsTldSelect");
+    if (tldSelect) {
+        tldSelect.addEventListener("change", () => mapsLoadDomains(1));
+    }
+}
+
+async function mapsLoadGeo() {
+    try {
+        const [geoResp, nicheResp] = await Promise.all([
+            fetch("/api/maps/geo"),
+            fetch("/api/maps/niches")
+        ]);
+
+        if (!geoResp.ok) {
+            const err = await geoResp.json().catch(() => ({}));
+            throw new Error(err.error || "Could not load geo data");
+        }
+
+        mapsGeo = await geoResp.json();
+        mapsNiches = nicheResp.ok ? await nicheResp.json() : [];
+
+        const nicheSelect = document.getElementById("mapsNiche");
+        if (nicheSelect) {
+            nicheSelect.innerHTML = mapsNiches
+                .map(n => `<option value="${escapeHtml(n.value)}">${escapeHtml(n.label)}</option>`)
+                .join("");
+        }
+
+        const countrySelect = document.getElementById("mapsCountry");
+        if (countrySelect) {
+            countrySelect.innerHTML = mapsGeo
+                .map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.name)}</option>`)
+                .join("");
+        }
+
+        mapsOnCountryChange();
+        mapsShowError("");
+    } catch (e) {
+        mapsShowError("Maps: " + e.message);
+    }
+}
+
+function mapsOnCountryChange() {
+    const countrySelect = document.getElementById("mapsCountry");
+    const citySelect = document.getElementById("mapsCity");
+    if (!countrySelect || !citySelect) return;
+
+    const country = mapsGeo.find(c => c.code === countrySelect.value);
+    const cities = (country && country.cities) || [];
+
+    citySelect.innerHTML = cities
+        .map(city => `<option value="${escapeHtml(city.name)}">${escapeHtml(city.name)}</option>`)
+        .join("");
+
+    const languageInput = document.getElementById("mapsLanguage");
+    if (languageInput && country && country.language) {
+        languageInput.value = country.language;
+    }
+}
+
+function mapsOnNicheChange() {
+    mapsNicheManual = !mapsNicheManual;
+
+    const select = document.getElementById("mapsNiche");
+    const manual = document.getElementById("mapsNicheManual");
+    const toggle = document.getElementById("mapsNicheToggle");
+    if (!select || !manual || !toggle) return;
+
+    select.style.display = mapsNicheManual ? "none" : "block";
+    manual.style.display = mapsNicheManual ? "block" : "none";
+    toggle.textContent = mapsNicheManual ? "list" : "manual";
+
+    if (mapsNicheManual) manual.focus();
+}
+
+function mapsCurrentNiche() {
+    if (mapsNicheManual) {
+        return (document.getElementById("mapsNicheManual")?.value || "").trim();
+    }
+    return document.getElementById("mapsNiche")?.value || "";
+}
+
+async function mapsStartJob() {
+    const countrySelect = document.getElementById("mapsCountry");
+    const country = mapsGeo.find(c => c.code === countrySelect?.value);
+
+    const payload = {
+        niche: mapsCurrentNiche(),
+        country: country ? country.name : "",
+        city: document.getElementById("mapsCity")?.value || "",
+        language: (document.getElementById("mapsLanguage")?.value || "").trim(),
+        tld_filter: (document.getElementById("mapsTldFilter")?.value || "").trim(),
+        depth: parseInt(document.getElementById("mapsDepth")?.value, 10) || 10,
+        concurrency: parseInt(document.getElementById("mapsConcurrency")?.value, 10) || 4,
+        grid_cell: parseFloat(document.getElementById("mapsGridCell")?.value) || 1.0,
+        zoom: parseInt(document.getElementById("mapsZoom")?.value, 10) || 15,
+        custom_query: (document.getElementById("mapsCustomQuery")?.value || "").trim()
+    };
+
+    if (!payload.niche && !payload.custom_query) {
+        mapsShowError("Pick a niche or enter a custom query");
+        return;
+    }
+    if (!payload.country || !payload.city) {
+        mapsShowError("Pick a country and a city");
+        return;
+    }
+
+    const startBtn = document.getElementById("mapsStartBtn");
+    if (startBtn) startBtn.disabled = true;
+    mapsShowError("");
+
+    try {
+        const resp = await fetch("/api/maps/job/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            mapsShowError(resp.status === 503
+                ? "Google Maps scraper is unreachable — is the Docker container running? " + (data.error || "")
+                : (data.error || "Could not start the job"));
+            return;
+        }
+
+        mapsStatusPoll();
+    } catch (e) {
+        mapsShowError("Network error: " + e.message);
+    } finally {
+        if (startBtn) startBtn.disabled = false;
+    }
+}
+
+async function mapsStopJob() {
+    const stopBtn = document.getElementById("mapsStopBtn");
+    if (stopBtn) stopBtn.disabled = true;
+
+    try {
+        const resp = await fetch("/api/maps/job/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            mapsShowError(data.error || "Could not stop the job");
+            return;
+        }
+
+        mapsStatusPoll();
+    } catch (e) {
+        mapsShowError("Network error: " + e.message);
+    } finally {
+        if (stopBtn) stopBtn.disabled = false;
+    }
+}
+
+async function mapsStatusPoll() {
+    try {
+        const resp = await fetch("/api/maps/job/status");
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        const job = data.job;
+        const bar = document.getElementById("mapsStatusBar");
+        const startBtn = document.getElementById("mapsStartBtn");
+        const stopBtn = document.getElementById("mapsStopBtn");
+
+        mapsIsRunning = Boolean(job && job.status === "running");
+
+        if (bar) bar.classList.toggle("active", Boolean(job));
+        if (startBtn) startBtn.style.display = mapsIsRunning ? "none" : "block";
+        if (stopBtn) stopBtn.style.display = mapsIsRunning ? "block" : "none";
+
+        if (job) {
+            const statusEl = document.getElementById("mapsStatStatus");
+            if (statusEl) {
+                statusEl.textContent = job.status;
+                statusEl.className = "is-" + job.status;
+            }
+            document.getElementById("mapsStatCycles").textContent = job.cycle_count ?? 0;
+            document.getElementById("mapsStatDomains").textContent = (data.domains ?? 0).toLocaleString();
+            document.getElementById("mapsStatTime").textContent =
+                job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—";
+        }
+
+        // подтянуть таблицу, когда появились новые домены
+        const total = data.total_domains ?? 0;
+        if (total !== mapsLastDomainCount) {
+            mapsLastDomainCount = total;
+            if (mapsPage === 1) mapsLoadDomains(1);
+        }
+    } catch (e) {
+        // сеть моргнула — следующий тик повторит
+    }
+}
+
+function mapsFilterParams() {
+    const params = new URLSearchParams();
+    const search = (document.getElementById("mapsSearch")?.value || "").trim();
+    const tld = document.getElementById("mapsTldSelect")?.value || "";
+    if (search) params.set("search", search);
+    if (tld) params.set("tld", tld);
+    return params;
+}
+
+async function mapsLoadDomains(page) {
+    mapsPage = Math.max(1, page || 1);
+
+    const params = mapsFilterParams();
+    params.set("page", mapsPage);
+    params.set("limit", MAPS_PAGE_SIZE);
+
+    try {
+        const resp = await fetch("/api/maps/domains?" + params.toString());
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        mapsTotalPages = data.pages || 0;
+
+        // фильтр мог сократить выдачу — не оставляем пользователя на пустой странице
+        if (mapsTotalPages > 0 && mapsPage > mapsTotalPages) {
+            return mapsLoadDomains(mapsTotalPages);
+        }
+
+        const countEl = document.getElementById("mapsDomainsCount");
+        if (countEl) countEl.textContent = (data.total || 0).toLocaleString();
+
+        mapsRenderTldOptions(data.tlds || []);
+
+        const tbody = document.getElementById("mapsDomainsTbody");
+        if (tbody) {
+            tbody.innerHTML = (data.items || []).length
+                ? data.items.map(item => `<tr>
+                        <td>${escapeHtml(item.domain)}</td>
+                        <td>${escapeHtml(item.business_name)}</td>
+                        <td>${escapeHtml(item.country)}</td>
+                        <td>${escapeHtml(item.city)}</td>
+                        <td>${escapeHtml(item.niche)}</td>
+                        <td>${escapeHtml((item.discovered_at || "").replace("T", " "))}</td>
+                    </tr>`).join("")
+                : `<tr><td colspan="6" class="maps-empty">No domains yet — start a scrape to collect them.</td></tr>`;
+        }
+
+        const pagination = document.getElementById("mapsPagination");
+        if (pagination) {
+            pagination.innerHTML = mapsTotalPages > 1
+                ? `<button type="button" class="db-load-more-btn" ${mapsPage <= 1 ? "disabled" : ""}
+                        onclick="mapsLoadDomains(${mapsPage - 1})">Prev</button>
+                   <span>Page ${mapsPage} of ${mapsTotalPages}</span>
+                   <button type="button" class="db-load-more-btn" ${mapsPage >= mapsTotalPages ? "disabled" : ""}
+                        onclick="mapsLoadDomains(${mapsPage + 1})">Next</button>`
+                : "";
+        }
+    } catch (e) {
+        mapsShowError("Could not load domains: " + e.message);
+    }
+}
+
+function mapsRenderTldOptions(tlds) {
+    const select = document.getElementById("mapsTldSelect");
+    if (!select) return;
+
+    const current = select.value;
+    const options = ['<option value="">All TLDs</option>'].concat(
+        tlds.map(tld => `<option value="${escapeHtml(tld)}">.${escapeHtml(tld)}</option>`)
+    );
+    const markup = options.join("");
+
+    if (select.innerHTML !== markup) {
+        select.innerHTML = markup;
+        if (current && tlds.includes(current)) select.value = current;
+    }
+}
+
+function mapsExportTxt() {
+    const params = mapsFilterParams();
+    params.set("format", "txt");
+    window.location = "/api/maps/domains/export?" + params.toString();
+}
+
+function mapsExportCsv() {
+    const params = mapsFilterParams();
+    params.set("format", "csv");
+    window.location = "/api/maps/domains/export?" + params.toString();
+}
+
+async function mapsLoadProxies() {
+    try {
+        const resp = await fetch("/api/maps/proxies");
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        const tbody = document.getElementById("mapsProxyTbody");
+        if (!tbody) return;
+
+        tbody.innerHTML = (data.items || []).length
+            ? data.items.map(item => `<tr>
+                    <td>${escapeHtml(item.proxy_masked || item.proxy)}</td>
+                    <td><span class="status-badge ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td>
+                    <td>${escapeHtml((item.last_checked || "—").replace("T", " "))}</td>
+                    <td><button type="button" class="maps-row-btn"
+                            onclick="mapsDeleteProxy(${item.id})">Delete</button></td>
+                </tr>`).join("")
+            : `<tr><td colspan="4" class="maps-empty">No proxies added.</td></tr>`;
+
+        const checkBtn = document.getElementById("mapsCheckProxiesBtn");
+        if (checkBtn) {
+            checkBtn.disabled = Boolean(data.checking);
+            checkBtn.textContent = data.checking ? "Checking…" : "Check All";
+        }
+
+        // пока проверка идёт — обновляем таблицу
+        if (data.checking) setTimeout(mapsLoadProxies, 2000);
+    } catch (e) {
+        mapsShowError("Could not load proxies: " + e.message);
+    }
+}
+
+async function mapsAddProxies() {
+    const textarea = document.getElementById("mapsProxyInput");
+    const raw = (textarea?.value || "").trim();
+    if (!raw) return;
+
+    try {
+        const resp = await fetch("/api/maps/proxies", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ proxies: raw })
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            mapsShowError(data.error || "Could not add proxies");
+            return;
+        }
+
+        if (textarea) textarea.value = "";
+        showDbToast(`Added ${data.added} proxy(ies)`);
+        await mapsLoadProxies();
+    } catch (e) {
+        mapsShowError("Network error: " + e.message);
+    }
+}
+
+async function mapsCheckProxies() {
+    try {
+        const resp = await fetch("/api/maps/proxies/check", { method: "POST" });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            mapsShowError(data.error || "Could not start the proxy check");
+            return;
+        }
+
+        await mapsLoadProxies();
+    } catch (e) {
+        mapsShowError("Network error: " + e.message);
+    }
+}
+
+async function mapsDeleteProxy(proxyId) {
+    try {
+        const resp = await fetch("/api/maps/proxies/" + proxyId, { method: "DELETE" });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            mapsShowError(data.error || "Could not delete the proxy");
+            return;
+        }
+        await mapsLoadProxies();
+    } catch (e) {
+        mapsShowError("Network error: " + e.message);
+    }
+}
+
+async function authLogout() {
+    try {
+        await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {}
+    window.location.reload();
+}
