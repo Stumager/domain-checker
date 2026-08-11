@@ -34,6 +34,7 @@ from .archive.spam_detector import (
 from .check_pipeline import run_check
 from .models import CheckerState
 from .services import expand_domains
+from .services.rdap_service import load_rdap_bootstrap
 from .utils import parse_tlds
 
 web_bp = Blueprint("web", __name__)
@@ -103,6 +104,9 @@ def start_check():
     state = get_checker_state()
     if not state.begin_run(len(expanded_domains)):
         return jsonify({"error": "Scan already in progress"}), 409
+
+    # Pre-warm RDAP bootstrap so all pipeline threads share a ready cache
+    load_rdap_bootstrap()
 
     t = threading.Thread(
         target=run_check,

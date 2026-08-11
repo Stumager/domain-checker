@@ -30,7 +30,7 @@ RDAP_SESSION_POOL_MAXSIZE = 64
 RDAP_FORBIDDEN_FALLBACK = True
 RDAP_PARSE_ERROR_BODY = True
 RDAP_RESTRICTED_ENABLE = True
-RDAP_RESTRICTED_TTL = 3600.0
+RDAP_RESTRICTED_TTL = 600.0
 
 WHOIS_SERVER_OVERRIDES_JSON = ""
 WHOIS_NOT_FOUND_OVERRIDES_JSON = ""
@@ -58,6 +58,18 @@ _whois_not_found_overrides: Optional[Dict[str, List[str]]] = None
 _WHOIS_SERVER_BY_TLD: Dict[str, str] = {
     "mx": "whois.mx",
     "co": "whois.registry.co",
+    "de": "whois.denic.de",
+    "in": "whois.registry.in",
+    "fr": "whois.nic.fr",
+    "pl": "whois.dns.pl",
+    "nl": "whois.domain-registry.nl",
+    "br": "whois.registro.br",
+    "tr": "whois.nic.tr",
+    "cn": "whois.cnnic.cn",
+    "id": "whois.pandi.or.id",
+    "es": "whois.nic.es",
+    "it": "whois.nic.it",
+    "cz": "whois.nic.cz",
 }
 
 _WHOIS_NOT_FOUND_MARKERS_BY_TLD: Dict[str, List[str]] = {
@@ -69,6 +81,12 @@ _WHOIS_NOT_FOUND_MARKERS_BY_TLD: Dict[str, List[str]] = {
     "co": [
         "domain not found",
         "the queried object does not exist",
+    ],
+    "pl": [
+        "no information available about domain name",
+    ],
+    "cn": [
+        "no matching record",
     ],
 }
 
@@ -424,40 +442,29 @@ def _rdap_hint_from_response(resp: requests.Response) -> Optional[str]:
     return _rdap_hint_from_json(data)
 
 
-def _rdap_try_get(url: str) -> Tuple[int, Optional[str]]:
-    """Make RDAP GET request with retries, returning status and optional hint."""
+def _rdap_try_get(url: str) -> Tuple[int, Optional[str], bool, Optional[str], bool]:
+    """Make a single RDAP GET request (no retries).
+
+    Returns:
+        (status_code, hint, should_retry, retry_after_header, has_json_content)
+    """
     s = _get_session()
-    last_sc = 0
-    last_hint: Optional[str] = None
-    
-    for attempt in range(RDAP_RETRIES + 1):
+    try:
+        resp = s.get(url, timeout=RDAP_TIMEOUT, allow_redirects=True, stream=True)
         try:
-            resp = s.get(url, timeout=RDAP_TIMEOUT, allow_redirects=True, stream=True)
-            try:
-                sc = resp.status_code
-                last_sc = sc
-                hint = None
-                if sc in (200, 400):
-                    hint = _rdap_hint_from_response(resp)
-                    if hint:
-                        return sc, hint
-                last_hint = hint
-                if sc == 429 or (500 <= sc <= 599):
-                    if attempt < RDAP_RETRIES:
-                        _sleep_backoff(attempt, resp.headers.get("Retry-After"))
-                        continue
-                return sc, hint
-            finally:
-                resp.close()
-        except Exception:
-            last_sc = 0
-            last_hint = None
-            if attempt < RDAP_RETRIES:
-                _sleep_backoff(attempt)
-                continue
-            return 0, None
-    
-    return last_sc, last_hint
+            sc = resp.status_code
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            has_json = "json" in ctype or "rdap" in ctype
+            hint = None
+            if sc in (200, 400):
+                hint = _rdap_hint_from_response(resp)
+            should_retry = sc == 429 or (500 <= sc <= 599)
+            retry_after = resp.headers.get("Retry-After") if should_retry else None
+            return sc, hint, should_retry, retry_after, has_json
+        finally:
+            resp.close()
+    except Exception:
+        return 0, None, True, None, False
 
 
 def _whois_query(server: str, query: str, timeout: float = 8.0, max_bytes: int = 256000) -> str:
@@ -512,7 +519,16 @@ def _whois_check(domain_ascii: str, tld: str) -> Optional[str]:
     overrides = _parse_whois_not_found_overrides()
     tld_markers = overrides.get(tld, []) or _WHOIS_NOT_FOUND_MARKERS_BY_TLD.get(tld, [])
     markers = tld_markers or _WHOIS_GENERIC_NOT_FOUND_MARKERS
-    if any(marker in resp_l for marker in markers):
+
+    # Only scan for "not found" markers in lines that don't contain the queried
+    # domain name itself — avoids false-available when a preamble line says
+    # "not found in our database" before the actual domain record follows.
+    domain_lower = domain_ascii.lower()
+    check_text = "\n".join(
+        line for line in resp_l.splitlines()
+        if domain_lower not in line
+    )
+    if any(marker in check_text for marker in markers):
         return "available"
 
     return "taken"
@@ -571,11 +587,16 @@ def rdap_check(domain: str) -> str:
     
     path = "domain/" + quote(domain_ascii, safe=".-")
     sem = _get_tld_semaphore(tld)
-    
-    with sem:
-        for base in bases:
-            url = base + path
-            sc, hint = _rdap_try_get(url)
+
+    for base in bases:
+        url = base + path
+        sc = 0
+        hint: Optional[str] = None
+
+        for attempt in range(RDAP_RETRIES + 1):
+            # Hold semaphore only during the HTTP request, not during backoff sleep
+            with sem:
+                sc, hint, should_retry, retry_after, has_json = _rdap_try_get(url)
 
             if hint == "available":
                 return "available"
@@ -591,15 +612,20 @@ def rdap_check(domain: str) -> str:
                     return "error"
                 return "taken"
             if sc == 200:
+                # Non-JSON body (HTML error page, redirect) is not a valid RDAP response
+                if not has_json:
+                    break
                 return "taken"
             if sc == 404:
                 return "available"
             if sc == 400:
                 return "invalid"
-            if sc == 0:
+
+            if should_retry and attempt < RDAP_RETRIES:
+                # Sleep outside the semaphore so other TLD requests aren't blocked
+                _sleep_backoff(attempt, retry_after)
                 continue
-            if sc == 429 or (500 <= sc <= 599):
-                continue
+            break
 
     whois_res = _whois_check(domain_ascii, tld)
     if whois_res is not None:
