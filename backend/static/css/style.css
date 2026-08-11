@@ -1677,6 +1677,26 @@ button:focus-visible {
 
 .maps-toggle-link:hover { color: var(--ach); }
 
+.maps-help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    margin-left: 3px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    color: var(--ac);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.maps-help-dark { color: inherit; border-color: currentColor; }
+.maps-active-filter { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12px; color: var(--t2); }
+
 /* Status bar */
 .maps-status-bar {
     display: none;
@@ -1761,6 +1781,25 @@ button:focus-visible {
     margin-top: 14px;
     overflow-x: auto;
 }
+
+.maps-coverage { margin-top: 12px; }
+.maps-coverage[hidden] { display: none; }
+.maps-coverage-head,
+.maps-coverage-meta { display: flex; justify-content: space-between; color: var(--t2); font-size: 12px; }
+.maps-coverage-head b { color: var(--ac); font-family: var(--mono); }
+.maps-coverage-track { height: 8px; margin-top: 6px; overflow: hidden; background: var(--s3); border-radius: 99px; }
+.maps-coverage-fill { width: 0; height: 100%; background: var(--ac); border-radius: inherit; }
+.maps-coverage-meta { margin-top: 5px; font-family: var(--mono); font-size: 11px; }
+
+.maps-proxy-toolbar { margin-top: 12px; }
+
+.maps-proxy-toolbar input {
+    width: min(240px, 100%);
+    padding: 6px 9px;
+    font-size: 12px;
+}
+
+.maps-clear-failed-btn:hover { border-color: var(--err); color: var(--err); }
 
 .status-badge {
     display: inline-block;

@@ -1660,9 +1660,11 @@ window.addEventListener("DOMContentLoaded", () => {
 // -----------------------------------------------------------------------------
 
 const MAPS_PAGE_SIZE = 50;
+const MAPS_PROXY_PAGE_SIZE = 10;
 
 let mapsGeo = [];
 let mapsNiches = [];
+let mapsSessions = [];
 let mapsInitStarted = false;
 let mapsStatusTimer = null;
 let mapsSearchTimer = null;
@@ -1671,6 +1673,9 @@ let mapsTotalPages = 0;
 let mapsNicheManual = false;
 let mapsIsRunning = false;
 let mapsLastDomainCount = -1;
+let mapsProxyPage = 1;
+let mapsProxyTotalPages = 0;
+let mapsProxySearchTimer = null;
 
 function mapsShowError(message) {
     const el = document.getElementById("mapsError");
@@ -1699,9 +1704,18 @@ async function mapsInit() {
     mapsInitStarted = true;
 
     await mapsLoadGeo();
+    await mapsLoadSessions();
     mapsLoadProxies();
     mapsLoadDomains(1);
     mapsStatusPoll();
+
+    const proxySearch = document.getElementById("mapsProxySearch");
+    if (proxySearch) {
+        proxySearch.addEventListener("input", () => {
+            clearTimeout(mapsProxySearchTimer);
+            mapsProxySearchTimer = setTimeout(() => mapsLoadProxies(1), 250);
+        });
+    }
 
     if (!mapsStatusTimer) {
         mapsStatusTimer = setInterval(mapsStatusPoll, 10000);
@@ -1718,6 +1732,27 @@ async function mapsInit() {
     const tldSelect = document.getElementById("mapsTldSelect");
     if (tldSelect) {
         tldSelect.addEventListener("change", () => mapsLoadDomains(1));
+    }
+
+    ["mapsSessionSelect", "mapsStatusSelect", "mapsActiveOnly"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("change", () => mapsLoadDomains(1));
+    });
+}
+
+async function mapsLoadSessions() {
+    try {
+        const resp = await fetch("/api/maps/sessions");
+        if (!resp.ok) return;
+        mapsSessions = await resp.json();
+        const select = document.getElementById("mapsSessionSelect");
+        if (!select) return;
+        select.innerHTML = '<option value="">Все сессии</option>' + mapsSessions.map(s => {
+            const label = `#${s.id} ${s.niche || s.custom_query || "поиск"} — ${s.city}, ${s.country}`;
+            return `<option value="${s.id}">${escapeHtml(label)}</option>`;
+        }).join("");
+    } catch (e) {
+        mapsShowError("Could not load sessions: " + e.message);
     }
 }
 
@@ -1745,12 +1780,17 @@ async function mapsLoadGeo() {
 
         const countrySelect = document.getElementById("mapsCountry");
         if (countrySelect) {
-            countrySelect.innerHTML = mapsGeo
-                .map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.name)}</option>`)
-                .join("");
+            const countryOptions = document.getElementById("mapsCountryOptions");
+            if (countryOptions) {
+                countryOptions.innerHTML = mapsGeo
+                    .map(c => `<option value="${escapeHtml(c.name)}"></option>`)
+                    .join("");
+            }
+            countrySelect.addEventListener("input", mapsOnCountryChange);
         }
 
         mapsOnCountryChange();
+        mapsInitGeoFilters();
         mapsShowError("");
     } catch (e) {
         mapsShowError("Maps: " + e.message);
@@ -1762,12 +1802,16 @@ function mapsOnCountryChange() {
     const citySelect = document.getElementById("mapsCity");
     if (!countrySelect || !citySelect) return;
 
-    const country = mapsGeo.find(c => c.code === countrySelect.value);
+    const country = mapsGeo.find(c => c.name === countrySelect.value || c.code === countrySelect.value);
     const cities = (country && country.cities) || [];
 
-    citySelect.innerHTML = cities
-        .map(city => `<option value="${escapeHtml(city.name)}">${escapeHtml(city.name)}</option>`)
-        .join("");
+    const cityOptions = document.getElementById("mapsCityOptions");
+    if (cityOptions) {
+        cityOptions.innerHTML = cities
+            .map(city => `<option value="${escapeHtml(city.name)}"></option>`)
+            .join("");
+    }
+    if (!country) citySelect.value = "";
 
     const languageInput = document.getElementById("mapsLanguage");
     if (languageInput && country && country.language) {
@@ -1799,7 +1843,7 @@ function mapsCurrentNiche() {
 
 async function mapsStartJob() {
     const countrySelect = document.getElementById("mapsCountry");
-    const country = mapsGeo.find(c => c.code === countrySelect?.value);
+    const country = mapsGeo.find(c => c.name === countrySelect?.value || c.code === countrySelect?.value);
 
     const payload = {
         niche: mapsCurrentNiche(),
@@ -1808,8 +1852,6 @@ async function mapsStartJob() {
         language: (document.getElementById("mapsLanguage")?.value || "").trim(),
         tld_filter: (document.getElementById("mapsTldFilter")?.value || "").trim(),
         depth: parseInt(document.getElementById("mapsDepth")?.value, 10) || 10,
-        concurrency: parseInt(document.getElementById("mapsConcurrency")?.value, 10) || 4,
-        grid_cell: parseFloat(document.getElementById("mapsGridCell")?.value) || 1.0,
         zoom: parseInt(document.getElementById("mapsZoom")?.value, 10) || 15,
         custom_query: (document.getElementById("mapsCustomQuery")?.value || "").trim()
     };
@@ -1843,6 +1885,7 @@ async function mapsStartJob() {
         }
 
         mapsStatusPoll();
+        mapsLoadSessions();
     } catch (e) {
         mapsShowError("Network error: " + e.message);
     } finally {
@@ -1885,10 +1928,25 @@ async function mapsStatusPoll() {
         const bar = document.getElementById("mapsStatusBar");
         const startBtn = document.getElementById("mapsStartBtn");
         const stopBtn = document.getElementById("mapsStopBtn");
+        const coverage = data.coverage;
+        const coverageBox = document.getElementById("mapsCoverage");
+        const coverageFill = document.getElementById("mapsCoverageFill");
+        const coveragePercent = document.getElementById("mapsCoveragePercent");
+        const coverageMeta = document.getElementById("mapsCoverageMeta");
 
         mapsIsRunning = Boolean(job && job.status === "running");
 
         if (bar) bar.classList.toggle("active", Boolean(job));
+        if (coverageBox) coverageBox.hidden = !coverage?.available;
+        if (coverage?.available) {
+            const percent = Number(coverage.percent || 0);
+            if (coverageFill) coverageFill.style.width = percent + "%";
+            if (coveragePercent) coveragePercent.textContent = percent + "%";
+            if (coverageMeta) coverageMeta.textContent =
+                `Completed cells: ${coverage.completed_cells} / ${coverage.total_cells}`;
+            const track = coverageBox?.querySelector(".maps-coverage-track");
+            if (track) track.setAttribute("aria-valuenow", String(percent));
+        }
         if (startBtn) startBtn.style.display = mapsIsRunning ? "none" : "block";
         if (stopBtn) stopBtn.style.display = mapsIsRunning ? "block" : "none";
 
@@ -1919,9 +1977,85 @@ function mapsFilterParams() {
     const params = new URLSearchParams();
     const search = (document.getElementById("mapsSearch")?.value || "").trim();
     const tld = document.getElementById("mapsTldSelect")?.value || "";
+    const country = document.getElementById("mapsCountryFilter")?.value || "";
+    const city = document.getElementById("mapsCityFilter")?.value || "";
     if (search) params.set("search", search);
     if (tld) params.set("tld", tld);
+    if (country) params.set("country", country);
+    if (city) params.set("city", city);
+    const session = document.getElementById("mapsSessionSelect")?.value || "";
+    const exportStatus = document.getElementById("mapsStatusSelect")?.value || "new";
+    const active = document.getElementById("mapsActiveOnly")?.checked;
+    if (session) params.set("session", session);
+    if (exportStatus) params.set("export_status", exportStatus);
+    if (active) params.set("active", "1");
     return params;
+}
+
+function mapsInitGeoFilters() {
+    const country = document.getElementById("mapsCountryFilter");
+    const city = document.getElementById("mapsCityFilter");
+    if (!country || !city) return;
+
+    const countryInput = document.createElement("input");
+    countryInput.type = "text";
+    countryInput.id = "mapsCountryFilter";
+    countryInput.setAttribute("list", "mapsCountryFilterOptions");
+    countryInput.placeholder = "Country";
+    countryInput.autocomplete = "off";
+    const countryOptions = document.createElement("datalist");
+    countryOptions.id = "mapsCountryFilterOptions";
+    country.replaceWith(countryInput, countryOptions);
+
+    const cityInput = document.createElement("input");
+    cityInput.type = "text";
+    cityInput.id = "mapsCityFilter";
+    cityInput.setAttribute("list", "mapsCityFilterOptions");
+    cityInput.placeholder = "City";
+    cityInput.autocomplete = "off";
+    const cityOptions = document.createElement("datalist");
+    cityOptions.id = "mapsCityFilterOptions";
+    city.replaceWith(cityInput, cityOptions);
+
+    countryOptions.innerHTML = mapsGeo.map(item =>
+        `<option value="${escapeHtml(item.name)}"></option>`
+    ).join("");
+
+    const allCities = mapsGeo.flatMap(item => item.cities || []);
+    const refreshCities = () => {
+        const selected = mapsGeo.find(item => item.name === countryInput.value);
+        const source = selected ? selected.cities : allCities;
+        const query = cityInput.value.trim().toLocaleLowerCase();
+        cityOptions.innerHTML = source
+            .filter(item => !query || item.name.toLocaleLowerCase().includes(query))
+            .slice(0, 300)
+            .map(item => `<option value="${escapeHtml(item.name)}"></option>`)
+            .join("");
+    };
+
+    countryInput.addEventListener("input", () => {
+        cityInput.value = "";
+        refreshCities();
+        if (!countryInput.value || mapsGeo.some(item => item.name === countryInput.value)) mapsLoadDomains(1);
+    });
+    cityInput.addEventListener("input", () => {
+        refreshCities();
+        if (!cityInput.value || allCities.some(item => item.name === cityInput.value)) mapsLoadDomains(1);
+    });
+    refreshCities();
+    return;
+    country.innerHTML = '<option value="">Все страны</option>' + mapsGeo.map(item =>
+        `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`
+    ).join("");
+    country.onchange = () => {
+        const selected = mapsGeo.find(item => item.name === country.value);
+        city.innerHTML = '<option value="">Все города</option>' + ((selected && selected.cities) || []).map(item =>
+            `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`
+        ).join("");
+        mapsLoadDomains(1);
+    };
+    city.onchange = () => mapsLoadDomains(1);
+    city.innerHTML = '<option value="">Все города</option>';
 }
 
 async function mapsLoadDomains(page) {
@@ -1958,6 +2092,7 @@ async function mapsLoadDomains(page) {
                         <td>${escapeHtml(item.city)}</td>
                         <td>${escapeHtml(item.niche)}</td>
                         <td>${escapeHtml((item.discovered_at || "").replace("T", " "))}</td>
+                        <td>${item.exported_at ? "Выгружен" : "Новый"}</td>
                     </tr>`).join("")
                 : `<tr><td colspan="6" class="maps-empty">No domains yet — start a scrape to collect them.</td></tr>`;
         }
@@ -2005,12 +2140,22 @@ function mapsExportCsv() {
     window.location = "/api/maps/domains/export?" + params.toString();
 }
 
-async function mapsLoadProxies() {
+async function mapsLoadProxies(page) {
+    mapsProxyPage = Math.max(1, page || mapsProxyPage);
     try {
-        const resp = await fetch("/api/maps/proxies");
+        const params = new URLSearchParams({
+            page: mapsProxyPage,
+            limit: MAPS_PROXY_PAGE_SIZE,
+            search: (document.getElementById("mapsProxySearch")?.value || "").trim()
+        });
+        const resp = await fetch("/api/maps/proxies?" + params.toString());
         if (!resp.ok) return;
 
         const data = await resp.json();
+        mapsProxyTotalPages = data.pages || 0;
+        if (mapsProxyTotalPages > 0 && mapsProxyPage > mapsProxyTotalPages) {
+            return mapsLoadProxies(mapsProxyTotalPages);
+        }
         const tbody = document.getElementById("mapsProxyTbody");
         if (!tbody) return;
 
@@ -2031,9 +2176,36 @@ async function mapsLoadProxies() {
         }
 
         // пока проверка идёт — обновляем таблицу
+        const pagination = document.getElementById("mapsProxyPagination");
+        if (pagination) {
+            pagination.innerHTML = mapsProxyTotalPages > 1
+                ? `<button type="button" class="db-load-more-btn" ${mapsProxyPage <= 1 ? "disabled" : ""}
+                        onclick="mapsLoadProxies(${mapsProxyPage - 1})">Prev</button>
+                   <span>Page ${mapsProxyPage} of ${mapsProxyTotalPages}</span>
+                   <button type="button" class="db-load-more-btn" ${mapsProxyPage >= mapsProxyTotalPages ? "disabled" : ""}
+                        onclick="mapsLoadProxies(${mapsProxyPage + 1})">Next</button>`
+                : "";
+        }
+
         if (data.checking) setTimeout(mapsLoadProxies, 2000);
     } catch (e) {
         mapsShowError("Could not load proxies: " + e.message);
+    }
+}
+
+async function mapsClearFailedProxies() {
+    if (!confirm("Clear all failed proxies?")) return;
+    try {
+        const resp = await fetch("/api/maps/proxies/failed", { method: "DELETE" });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            mapsShowError(data.error || "Could not clear failed proxies");
+            return;
+        }
+        showDbToast(`Cleared ${data.deleted || 0} failed proxy(ies)`);
+        await mapsLoadProxies(mapsProxyPage);
+    } catch (e) {
+        mapsShowError("Network error: " + e.message);
     }
 }
 

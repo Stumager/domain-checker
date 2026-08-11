@@ -294,6 +294,62 @@ class MapsApiTests(BaseAppTestCase):
         payload = client.get("/api/maps/domains?search=%25").get_json()
         self.assertEqual(payload["total"], 0)
 
+    def test_sessions_and_export_status_filters(self):
+        from app import db
+
+        client = self.create_client()
+        first_job = db.execute(
+            "INSERT INTO maps_jobs (niche, country, city, status) VALUES ('cafes', 'Spain', 'Madrid', 'stopped')"
+        )
+        second_job = db.execute(
+            "INSERT INTO maps_jobs (niche, country, city, status) VALUES ('gyms', 'Italy', 'Rome', 'running')"
+        )
+        with db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO maps_domains (domain, job_id, country, city, discovered_at) VALUES "
+                "('new.es', ?, 'Spain', 'Madrid', '2026-01-01T00:00:00+00:00')", (first_job,)
+            )
+            conn.execute(
+                "INSERT INTO maps_domain_sessions (domain, job_id, discovered_at) VALUES "
+                "('new.es', ?, '2026-01-01T00:00:00+00:00')", (first_job,)
+            )
+            conn.execute(
+                "INSERT INTO maps_domains (domain, job_id, country, city, discovered_at, exported_at) VALUES "
+                "('old.it', ?, 'Italy', 'Rome', '2026-01-02T00:00:00+00:00', '2026-01-03T00:00:00+00:00')", (second_job,)
+            )
+            conn.execute(
+                "INSERT INTO maps_domain_sessions (domain, job_id, discovered_at) VALUES "
+                "('old.it', ?, '2026-01-02T00:00:00+00:00')", (second_job,)
+            )
+
+        sessions = client.get("/api/maps/sessions").get_json()
+        self.assertEqual({row["id"] for row in sessions}, {first_job, second_job})
+        self.assertEqual(client.get("/api/maps/domains?export_status=new").get_json()["total"], 1)
+        self.assertEqual(client.get(f"/api/maps/domains?session={second_job}").get_json()["total"], 1)
+        self.assertEqual(client.get("/api/maps/domains?active=1").get_json()["total"], 1)
+
+        exported = client.get("/api/maps/domains/export?format=txt&export_status=new")
+        self.assertEqual(exported.get_data(as_text=True), "new.es")
+        self.assertEqual(client.get("/api/maps/domains?export_status=new").get_json()["total"], 0)
+
+    def test_maps_data_isolated_between_accounts(self):
+        from app import db
+
+        app, admin = self.create_app_and_client()
+        with db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO maps_domains (owner_id, domain, country, city, discovered_at) "
+                "VALUES (1, 'admin-only.es', 'Spain', 'Madrid', '')"
+            )
+
+        other = app.test_client()
+        response = other.post("/api/auth/register", json={
+            "email": "maps-other@example.com", "password": "secret1"
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(other.get("/api/maps/domains?export_status=all").get_json()["total"], 0)
+        self.assertEqual(admin.get("/api/maps/domains?export_status=all").get_json()["total"], 1)
+
     def test_proxy_crud(self):
         client = self.create_client()
 
@@ -315,6 +371,26 @@ class MapsApiTests(BaseAppTestCase):
 
 
 class MapsServiceTests(BaseAppTestCase):
+    def test_download_csv_decodes_utf8_when_server_omits_charset(self):
+        from app.services import gmaps_client
+
+        class FakeResponse:
+            status_code = 200
+            headers = {"Content-Type": "text/csv"}
+            content = "title,website\nCafé,https://cafe.es\n".encode("utf-8")
+            encoding = "iso-8859-1"
+
+            @property
+            def text(self):
+                return self.content.decode(self.encoding)
+
+        response = FakeResponse()
+
+        with patch.object(gmaps_client, "_request", return_value=response):
+            csv_text = gmaps_client.download_gmaps_csv("live-job")
+
+        self.assertIn("Café", csv_text)
+
     def test_normalize_domain_strips_scheme_www_and_path(self):
         from app.services.maps_service import normalize_domain
 

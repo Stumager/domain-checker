@@ -310,3 +310,31 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> int:
 
     a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
     return int(earth_radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+
+
+def bbox_to_cells(bbox, cell_km: float = 1.0) -> list:
+    """Split a city bbox into real geographic cells for measurable coverage."""
+    if not bbox or len(bbox) != 4:
+        return []
+
+    south, north, west, east = (float(value) for value in bbox)
+    if north <= south or east <= west:
+        return []
+
+    cell_km = max(0.1, float(cell_km or 1.0))
+    lat_step = cell_km / 111.32
+    rows = max(1, math.ceil((north - south) / lat_step))
+    cells = []
+
+    for row in range(rows):
+        cell_south = south + row * lat_step
+        cell_north = min(north, cell_south + lat_step)
+        center_lat = (cell_south + cell_north) / 2.0
+        lon_step = cell_km / (111.32 * max(0.1, math.cos(math.radians(center_lat))))
+        columns = max(1, math.ceil((east - west) / lon_step))
+        for column in range(columns):
+            cell_west = west + column * lon_step
+            cell_east = min(east, cell_west + lon_step)
+            cells.append([cell_south, cell_north, cell_west, cell_east])
+
+    return cells

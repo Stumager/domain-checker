@@ -137,6 +137,10 @@ def _init_maps_module(app: Flask):
         "GMAPS_DOWNLOAD_TIMEOUT": app.config.get("GMAPS_DOWNLOAD_TIMEOUT"),
         "GMAPS_POLL_INTERVAL": app.config.get("GMAPS_POLL_INTERVAL"),
         "GMAPS_MAX_TIME": app.config.get("GMAPS_MAX_TIME"),
+        "GMAPS_DEFAULT_DEPTH": app.config.get("GMAPS_DEFAULT_DEPTH"),
+        "GMAPS_DEFAULT_ZOOM": app.config.get("GMAPS_DEFAULT_ZOOM"),
+        "GMAPS_DEFAULT_CONCURRENCY": app.config.get("GMAPS_DEFAULT_CONCURRENCY"),
+        "GMAPS_DEFAULT_GRID_CELL": app.config.get("GMAPS_DEFAULT_GRID_CELL"),
     })
     proxy_service.set_config({
         "PROXY_CHECK_URL": app.config.get("PROXY_CHECK_URL"),

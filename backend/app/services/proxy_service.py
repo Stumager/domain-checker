@@ -49,7 +49,7 @@ def parse_proxy_list(raw: str):
     return out
 
 
-def add_proxies(raw: str) -> int:
+def add_proxies(raw: str, owner_id=1) -> int:
     """Добавить прокси, пропуская уже существующие. Вернуть число новых."""
     proxies = parse_proxy_list(raw)
     if not proxies:
@@ -59,34 +59,64 @@ def add_proxies(raw: str) -> int:
     with db.get_connection() as conn:
         for proxy in proxies:
             cur = conn.execute(
-                "INSERT OR IGNORE INTO maps_proxies (proxy, status, last_checked, added_at) "
-                "VALUES (?, 'unknown', '', ?)",
-                (proxy, _now_iso()),
+                "INSERT OR IGNORE INTO maps_proxies (owner_id, proxy, status, last_checked, added_at) "
+                "VALUES (?, ?, 'unknown', '', ?)",
+                (owner_id, proxy, _now_iso()),
             )
             added += cur.rowcount or 0
 
     return added
 
 
-def list_proxies():
-    rows = db.query_all(
-        "SELECT id, proxy, status, last_checked, added_at FROM maps_proxies ORDER BY id"
+def list_proxies(owner_id=1, page=None, limit=10, search=""):
+    """Return proxies with optional search and pagination."""
+    clauses = ["owner_id = ?"]
+    params = [owner_id]
+    search = (search or "").strip()
+    if search:
+        clauses.append("proxy LIKE ? ESCAPE '\\'")
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        params.append(f"%{escaped}%")
+
+    where = " AND ".join(clauses)
+    total_row = db.query_one(f"SELECT COUNT(*) AS n FROM maps_proxies WHERE {where}", tuple(params))
+    total = int(total_row["n"] if total_row else 0)
+    query = (
+        "SELECT id, proxy, status, last_checked, added_at FROM maps_proxies "
+        f"WHERE {where} ORDER BY id"
     )
+    if page is not None:
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, max(0, page - 1) * limit])
+    rows = db.query_all(query, tuple(params))
     for row in rows:
         row["proxy_masked"] = _mask_proxy_url(row["proxy"])
-    return rows
+    return rows, total
 
 
-def working_proxies():
+def working_proxies(owner_id=1):
     """Рабочие прокси для передачи в gmaps."""
-    rows = db.query_all("SELECT proxy FROM maps_proxies WHERE status = 'working' ORDER BY id")
+    rows = db.query_all(
+        "SELECT proxy FROM maps_proxies WHERE owner_id = ? AND status = 'working' ORDER BY id",
+        (owner_id,),
+    )
     return [row["proxy"] for row in rows]
 
 
-def delete_proxy(proxy_id: int) -> bool:
+def delete_proxy(proxy_id: int, owner_id=1) -> bool:
     with db.get_connection() as conn:
-        cur = conn.execute("DELETE FROM maps_proxies WHERE id = ?", (proxy_id,))
+        cur = conn.execute("DELETE FROM maps_proxies WHERE id = ? AND owner_id = ?", (proxy_id, owner_id))
         return bool(cur.rowcount)
+
+
+def delete_failed_proxies(owner_id=1) -> int:
+    """Delete all proxies that failed their last check."""
+    with db.get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM maps_proxies WHERE owner_id = ? AND status = 'failed'",
+            (owner_id,),
+        )
+        return cur.rowcount or 0
 
 
 def is_checking() -> bool:
@@ -106,10 +136,10 @@ def _check_one(proxy: str) -> str:
         return "failed"
 
 
-def _check_all_worker():
+def _check_all_worker(owner_id=1):
     global _CHECK_RUNNING
     try:
-        rows = db.query_all("SELECT id, proxy FROM maps_proxies ORDER BY id")
+        rows = db.query_all("SELECT id, proxy FROM maps_proxies WHERE owner_id = ? ORDER BY id", (owner_id,))
         if not rows:
             return
 
@@ -129,7 +159,7 @@ def _check_all_worker():
             _CHECK_RUNNING = False
 
 
-def start_check_all() -> bool:
+def start_check_all(owner_id=1) -> bool:
     """Запустить фоновую проверку всех прокси. False — проверка уже идёт."""
     global _CHECK_RUNNING
     with _CHECK_LOCK:
@@ -137,6 +167,6 @@ def start_check_all() -> bool:
             return False
         _CHECK_RUNNING = True
 
-    thread = threading.Thread(target=_check_all_worker, daemon=True)
+    thread = threading.Thread(target=_check_all_worker, args=(owner_id,), daemon=True)
     thread.start()
     return True

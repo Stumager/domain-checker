@@ -281,9 +281,9 @@
                 <div class="maps-grid">
                     <div class="form-group">
                         <div class="maps-label-row">
-                            <label for="mapsNiche">Niche</label>
+                            <label for="mapsNiche">Niche <span class="maps-help" title="Категория бизнеса для поиска в Google Maps.">?</span></label>
                             <button type="button" class="maps-toggle-link" id="mapsNicheToggle"
-                                    onclick="mapsOnNicheChange()">manual</button>
+                                    onclick="mapsOnNicheChange()">manual <span class="maps-help" title="Переключает список ниш и ручной ввод произвольной ниши.">?</span></button>
                         </div>
                         <select id="mapsNiche" title="Business category used to build the search query"></select>
                         <input type="text" id="mapsNicheManual" style="display:none"
@@ -292,18 +292,23 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="mapsCountry">Country</label>
-                        <select id="mapsCountry" title="Country from the bundled dataset"
-                                onchange="mapsOnCountryChange()"></select>
+                        <label for="mapsCountry">Country <span class="maps-help" title="Страна, в которой будет выполняться поиск.">?</span></label>
+                        <input type="text" id="mapsCountry" list="mapsCountryOptions"
+                               placeholder="Start typing a country..." autocomplete="off"
+                               title="Country from the bundled dataset">
+                        <datalist id="mapsCountryOptions"></datalist>
                     </div>
 
                     <div class="form-group">
-                        <label for="mapsCity">City</label>
-                        <select id="mapsCity" title="City — the bounding box is resolved via Nominatim"></select>
+                        <label for="mapsCity">City <span class="maps-help" title="Город поиска и географическая область запроса.">?</span></label>
+                        <input type="text" id="mapsCity" list="mapsCityOptions"
+                               placeholder="Start typing a city..." autocomplete="off"
+                               title="City — the bounding box is resolved via Nominatim">
+                        <datalist id="mapsCityOptions"></datalist>
                     </div>
 
                     <div class="form-group">
-                        <label for="mapsLanguage">Language</label>
+                        <label for="mapsLanguage">Language <span class="maps-help" title="Двухбуквенный язык Google Maps, например en, es или ru.">?</span></label>
                         <input type="text" id="mapsLanguage" maxlength="2"
                                placeholder="en"
                                title="Two-letter language code sent to Google Maps. Auto-filled from the country, editable.">
@@ -312,15 +317,15 @@
 
                 <!-- 2. TLD filter + controls -->
                 <div class="form-group">
-                    <label for="mapsTldFilter">TLD filter</label>
+                    <label for="mapsTldFilter">TLD filter <span class="maps-help" title="Оставляет только домены с указанными зонами. Несколько зон можно разделить запятой или пробелом.">?</span></label>
                     <input type="text" id="mapsTldFilter" placeholder="es, it, com — leave empty to keep all"
                            title="Only keep discovered domains ending with these TLDs. Empty = keep everything.">
                     <div class="input-hint">Comma- or space-separated. Applied to every scrape cycle before saving.</div>
                 </div>
 
                 <div class="buttons">
-                    <button type="button" class="btn-primary" id="mapsStartBtn" onclick="mapsStartJob()">Start scraping</button>
-                    <button type="button" class="btn-stop" id="mapsStopBtn" onclick="mapsStopJob()" style="display:none">Stop</button>
+                    <button type="button" class="btn-primary" id="mapsStartBtn" onclick="mapsStartJob()">Start scraping <span class="maps-help maps-help-dark" title="Создаёт новую сессию поиска и запускает её в scraper.">?</span></button>
+                    <button type="button" class="btn-stop" id="mapsStopBtn" onclick="mapsStopJob()" style="display:none">Stop <span class="maps-help maps-help-dark" title="Останавливает текущую активную сессию поиска.">?</span></button>
                 </div>
 
                 <!-- 3. Status bar -->
@@ -331,36 +336,37 @@
                     <div class="maps-status-item">Last run <b id="mapsStatTime">—</b></div>
                 </div>
 
+                <div class="maps-coverage" id="mapsCoverage" hidden>
+                    <div class="maps-coverage-head">
+                        <span>City map coverage</span>
+                        <b id="mapsCoveragePercent">0%</b>
+                    </div>
+                    <div class="maps-coverage-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div class="maps-coverage-fill" id="mapsCoverageFill"></div>
+                    </div>
+                    <div class="maps-coverage-meta" id="mapsCoverageMeta">Completed cells: 0 / 0</div>
+                </div>
+
                 <!-- 4. Advanced settings -->
                 <div class="maps-collapsible" id="mapsAdvanced">
-                    <button type="button" class="maps-collapsible-head" onclick="mapsToggleSection('mapsAdvanced')">
+                    <button type="button" class="maps-collapsible-head" title="Рабочие параметры REST API: глубина, масштаб и пользовательский запрос." onclick="mapsToggleSection('mapsAdvanced')">
                         <span>Advanced Settings</span><span class="maps-caret">▼</span>
                     </button>
                     <div class="maps-collapsible-body">
                         <div class="maps-grid">
                             <div class="form-group">
-                                <label for="mapsDepth">depth</label>
+                            <label for="mapsDepth">depth <span class="maps-help" title="Глубина прокрутки результатов Google Maps. Большее значение даёт больше мест, но увеличивает время работы.">?</span></label>
                                 <input type="number" id="mapsDepth" value="10" min="1" max="100"
                                        title="How far to scroll the Google Maps results list. Higher = more places, slower run.">
                             </div>
                             <div class="form-group">
-                                <label for="mapsConcurrency">concurrency</label>
-                                <input type="number" id="mapsConcurrency" value="4" min="1" max="64"
-                                       title="Parallel scraper workers. Stored with the job; the gmaps web API currently ignores it (CLI-only flag).">
-                            </div>
-                            <div class="form-group">
-                                <label for="mapsGridCell">grid_cell</label>
-                                <input type="number" id="mapsGridCell" value="1.0" min="0.1" step="0.1"
-                                       title="Grid cell size in km used to split the bounding box. Stored with the job; the gmaps web API currently ignores it (CLI-only flag).">
-                            </div>
-                            <div class="form-group">
-                                <label for="mapsZoom">zoom</label>
+                            <label for="mapsZoom">zoom <span class="maps-help" title="Масштаб Google Maps, влияющий на область и детализацию поиска.">?</span></label>
                                 <input type="number" id="mapsZoom" value="15" min="0" max="21"
                                        title="Google Maps zoom level (0–21). Lower zoom covers more area with less detail.">
                             </div>
                         </div>
                         <div class="form-group" style="margin-bottom:0">
-                            <label for="mapsCustomQuery">custom_query override</label>
+                            <label for="mapsCustomQuery">custom_query override <span class="maps-help" title="Полностью заменяет автоматический запрос вида «ниша в городе».">?</span></label>
                             <input type="text" id="mapsCustomQuery" placeholder="e.g. vegan restaurants in Madrid"
                                    title="Replaces the generated “{niche} in {city}” query entirely. Leave empty to use the generated one.">
                         </div>
@@ -369,7 +375,7 @@
 
                 <!-- 5. Proxy settings -->
                 <div class="maps-collapsible" id="mapsProxies">
-                    <button type="button" class="maps-collapsible-head" onclick="mapsToggleSection('mapsProxies')">
+                    <button type="button" class="maps-collapsible-head" title="Настройка и проверка прокси, которые будут переданы scraper." onclick="mapsToggleSection('mapsProxies')">
                         <span>Proxy Settings</span><span class="maps-caret">▼</span>
                     </button>
                     <div class="maps-collapsible-body">
@@ -379,8 +385,14 @@
                                       placeholder="One per line — ip:port, ip:port:user:pass or http://user:pass@ip:port"></textarea>
                         </div>
                         <div class="maps-proxy-actions">
-                            <button type="button" class="btn-primary" onclick="mapsAddProxies()">Add</button>
-                            <button type="button" class="btn-indigo" id="mapsCheckProxiesBtn" onclick="mapsCheckProxies()">Check All</button>
+                            <button type="button" class="btn-primary" onclick="mapsAddProxies()">Add <span class="maps-help maps-help-dark" title="Сохраняет новые прокси в локальную базу.">?</span></button>
+                            <button type="button" class="btn-indigo" id="mapsCheckProxiesBtn" onclick="mapsCheckProxies()">Check All <span class="maps-help maps-help-dark" title="Проверяет все сохранённые прокси и помечает рабочие.">?</span></button>
+                        </div>
+                        <div class="maps-proxy-actions">
+                            <button type="button" class="maps-row-btn maps-clear-failed-btn" onclick="mapsClearFailedProxies()">Clear failed</button>
+                        </div>
+                        <div class="maps-proxy-toolbar">
+                            <input type="search" id="mapsProxySearch" placeholder="Search proxy" aria-label="Search proxy">
                         </div>
                         <div class="maps-proxy-table-wrap">
                             <table class="archive-table">
@@ -395,6 +407,7 @@
                                 <tbody id="mapsProxyTbody"></tbody>
                             </table>
                         </div>
+                        <div class="maps-pagination" id="mapsProxyPagination"></div>
                     </div>
                 </div>
 
@@ -412,7 +425,16 @@
                     <div id="mapsDomainsPane">
                         <div class="maps-filter-row">
                             <input type="text" id="mapsSearch" placeholder="Search domain or business…">
-                            <select id="mapsTldSelect" title="Filter the saved results by TLD"></select>
+                            <select id="mapsSessionSelect" title="Фильтр по сессии поиска"></select>
+                            <select id="mapsCountryFilter" title="Фильтр по стране"></select>
+                            <select id="mapsCityFilter" title="Фильтр по городу"></select>
+                            <select id="mapsStatusSelect" title="Показывать новые, уже выгруженные или все домены">
+                                <option value="new">Только новые</option>
+                                <option value="all">Все домены</option>
+                                <option value="exported">Уже выгруженные</option>
+                            </select>
+                            <select id="mapsTldSelect" title="Фильтр по TLD"></select>
+                            <label class="maps-active-filter"><input type="checkbox" id="mapsActiveOnly"> Только текущая сессия <span class="maps-help" title="Показывает домены, найденные активной в данный момент сессией.">?</span></label>
                         </div>
                         <div class="maps-table-wrap">
                             <table class="archive-table">
@@ -424,6 +446,7 @@
                                         <th>City</th>
                                         <th>Niche</th>
                                         <th>Discovered</th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="mapsDomainsTbody"></tbody>
@@ -437,8 +460,8 @@
                             Exports every domain matching the current search and TLD filter.
                         </div>
                         <div class="maps-export-row">
-                            <button type="button" class="btn-primary" onclick="mapsExportTxt()">Export TXT</button>
-                            <button type="button" class="btn-primary" onclick="mapsExportCsv()">Export CSV</button>
+                            <button type="button" class="btn-primary" onclick="mapsExportTxt()">Export TXT <span class="maps-help maps-help-dark" title="Скачать отфильтрованные домены в TXT и отметить их выгруженными.">?</span></button>
+                            <button type="button" class="btn-primary" onclick="mapsExportCsv()">Export CSV <span class="maps-help maps-help-dark" title="Скачать отфильтрованные домены в CSV и отметить их выгруженными.">?</span></button>
                         </div>
                     </div>
                 </div>

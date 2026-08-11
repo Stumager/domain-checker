@@ -11,6 +11,8 @@ JobData.Validate() на стороне Go требует непустые keywor
 двухбуквенный lang, ненулевые depth и max_time.
 """
 
+import re
+
 import requests
 
 from . import geo_data
@@ -109,7 +111,12 @@ def download_gmaps_csv(gmaps_job_id: str) -> str:
     if response.status_code >= 400:
         raise GmapsError(f"gmaps download failed ({response.status_code})")
 
-    response.encoding = response.encoding or "utf-8"
+    # requests defaults to ISO-8859-1 for text/* without an explicit charset.
+    # The scraper emits UTF-8 CSV, so use the declared charset when present and
+    # otherwise decode as UTF-8 to preserve non-ASCII business names/addresses.
+    content_type = response.headers.get("Content-Type", "")
+    charset = re.search(r"charset\s*=\s*([\\w.-]+)", content_type, re.IGNORECASE)
+    response.encoding = charset.group(1) if charset else "utf-8"
     return response.text
 
 
@@ -156,7 +163,7 @@ def build_payload(job: dict, bbox=None) -> dict:
         "email": False,
         "extra_reviews": False,
         "fast_mode": False,
-        "proxies": working_proxies(),
+        "proxies": working_proxies(job.get("owner_id") or 1),
     }
 
     if bbox:
