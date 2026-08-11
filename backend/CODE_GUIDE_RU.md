@@ -20,6 +20,11 @@
 - `checker/backend/app/utils/*.py` — нормализация, валидация, мелкие helper-функции.
 - `checker/backend/templates/index.html` — HTML интерфейса.
 - `checker/backend/static/js/app.js` — клиентская логика UI.
+- `checker/backend/app/auth.py`, `checker/backend/app/db.py` — сессионная
+  аутентификация и SQLite-слой (подробнее в разделе 20).
+- `checker/backend/app/maps_routes.py`, `checker/backend/app/services/maps_service.py`,
+  `gmaps_client.py`, `geo_data.py`, `proxy_service.py` — модуль Maps Scraper
+  (подробнее в разделе 20).
 
 Не являются основной runtime-логикой:
 
@@ -43,6 +48,14 @@
    - восстанавливает redirect-цели;
    - пытается определить spam/parking/topic shift/language shift/cloaking;
    - добавляет репутационные сигналы и риск-скор.
+
+3. (Добавлено позже) Собирает лиды через Google Maps — бесконечно опрашивает
+   контейнер `gosom/google-maps-scraper`, парсит website-домены из результатов
+   и копит их в SQLite, по кругу, пока пользователь не нажмет Stop.
+   Подробности — раздел 20.
+
+Всё это теперь спрятано за сессионным логином (раздел 20.1) — без
+аутентификации доступны только сама форма логина и heartbeat-эндпоинты.
 
 ## 3. Полный поток запуска программы
 
@@ -1108,3 +1121,155 @@ Wayback / Web Archive:
 - `updateStatus()` и `fetchWaybackData()`
 
 Именно эти места задают почти все пользовательское поведение приложения.
+
+## 20. Добавлено позже: Auth + модуль Maps Scraper
+
+> Этот раздел написан позже основного гайда и описывает две подсистемы, которых
+> не было в оригинальной архитектуре: сессионную аутентификацию и модуль
+> Maps Scraper (лид-скрейпинг через Google Maps). Стиль изложения тот же, но
+> глубина чуть меньше — за деталями смотри исходники напрямую.
+
+### 20.1. Auth-слой (`app/auth.py`)
+
+Файл: `checker/backend/app/auth.py`
+
+Механизм — обычная Flask session + `werkzeug.security` для хешей паролей,
+без JWT и без внешних auth-провайдеров.
+
+Ключевые части:
+
+- `PUBLIC_ENDPOINTS = {"static", "browser_ping", "browser_disconnect"}` — единственные
+  endpoint'ы, доступные без логина, плюс всё под префиксом `/api/auth/`.
+- `register_auth(app)` вызывается из `create_app()` и делает две вещи:
+  1. регистрирует `auth_bp` (`/api/auth/register|login|logout|me`);
+  2. вешает `@app.before_request` хук, который для любого не-публичного запроса
+     проверяет `is_authenticated()` — если нет, отдает 401 (для `/api/*`) или
+     рендерит `login.html` (для обычных страниц).
+- `seed_admin(app)` — при пустой таблице `users` создает аккаунт из
+  `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` и печатает предупреждение в консоль.
+  Вызывается один раз при старте, после инициализации БД.
+
+**Важная деталь, которую легко сломать:** `browser_ping`/`browser_disconnect`
+обязаны оставаться в `PUBLIC_ENDPOINTS`. Если их убрать из белого списка,
+`BrowserMonitor` (см. раздел 15) перестанет получать heartbeat на странице логина,
+решит, что вкладок нет, и убьет процесс через `BROWSER_MONITOR_STARTUP_GRACE`
+секунд — прямо во время попытки залогиниться. `templates/login.html` шлет свой
+собственный heartbeat отдельным `<script>`, не полагаясь на `app.js`.
+
+### 20.2. Хранилище: `app/db.py`
+
+До этого раздела в проекте не было персистентной БД — только in-memory
+`CheckerState` и `localStorage` на клиенте. Для Maps и пользователей введен
+SQLite-слой:
+
+- Соединение открывается **на каждую операцию** (`get_connection()` как
+  context manager), а не держится общим — это осознанное решение, потому что
+  poll-loop потоки и проверка прокси работают в отдельных daemon-потоках, а
+  `sqlite3.Connection` нельзя безопасно шарить между потоками.
+- `PRAGMA journal_mode=WAL` включен, чтобы фоновые потоки могли читать, пока
+  идет запись.
+- `init_db()` не только создает таблицы через `SCHEMA`, но и содержит
+  lightweight-миграции (`ALTER TABLE ... ADD COLUMN`, пересоздание
+  `maps_domains` при смене PK на `(owner_id, domain)`) — это нужно, чтобы старая
+  база (созданная до появления мульти-пользовательской изоляции) не ломалась
+  при апдейте кода, а тихо доезжала до новой схемы при следующем запуске.
+- Таблицы: `maps_jobs`, `maps_domains`, `maps_domain_sessions` (лог находок по
+  конкретному job, отдельно от таблицы дедупликации `maps_domains`),
+  `maps_proxies`, `maps_bbox_cache`, `users`.
+
+### 20.3. Модуль Maps Scraper — карта файлов
+
+```
+app/maps_routes.py              -> Flask-роуты /api/maps/*
+app/services/maps_service.py    -> жизненный цикл job'ов, poll-loop, разбор CSV
+app/services/gmaps_client.py    -> HTTP-клиент внешнего gmaps API + сборка payload
+app/services/geo_data.py        -> страны/города (bundled JSON), Nominatim bbox, язык страны
+app/services/proxy_service.py   -> хранение и фоновая проверка прокси
+app/data/geo.json               -> урезанный dr5hn countries-states-cities-database
+app/data/niches.json            -> 20 предустановленных ниш
+```
+
+Внешняя зависимость — отдельный Docker-контейнер
+[gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) в
+web/API-режиме (`docker-compose.yml` в корне репозитория, порт `8090:8080`).
+Это не встроенная библиотека — это отдельный HTTP-сервис, с которым
+`gmaps_client.py` общается по REST.
+
+### 20.4. Жизненный цикл одной Maps-задачи
+
+1. `POST /api/maps/job/start` (`maps_routes.start_job`) вызывает
+   `maps_service.start_job(payload, owner_id)`.
+2. Внутри: резолвится страна/язык (`geo_data.default_language`), достается bbox
+   города через `geo_data.fetch_bbox` (с кэшем в `maps_bbox_cache` — повторный
+   запрос того же города не бьет Nominatim снова), создается запись в
+   `maps_jobs` со статусом `running`.
+3. `gmaps_client.build_payload(job, bbox)` собирает JSON для внешнего API и
+   `create_gmaps_job(...)` шлет `POST /api/v1/jobs` в контейнер.
+4. Запускается daemon-поток `_maps_poll_loop(job_id, gmaps_job_id)`.
+5. Цикл поллинга (`maps_service.py`):
+   - каждые `GMAPS_POLL_INTERVAL` секунд опрашивает статус через
+     `get_gmaps_job(...)`;
+   - `pending`/`working` -> просто ждет дальше;
+   - `ok` -> скачивает CSV (`download_gmaps_csv`), парсит его через
+     `ingest_csv(...)`: нормализует `website` в голый домен
+     (`normalize_domain`), фильтрует по TLD, вставляет новые строки
+     (`INSERT OR IGNORE`, PK — `(owner_id, domain)`, так что для одного
+     аккаунта дубликаты между циклами не пишутся дважды);
+   - `failed` -> считает как неудачный цикл;
+   - после `ok`/`failed` удаляет job на стороне gmaps и, если наша задача
+     всё ещё `running`, тут же ставит новую через `_start_next_cycle(...)` —
+     отсюда "бесконечный" скрейпинг до нажатия Stop;
+   - после `MAX_CONSECUTIVE_FAILURES` (5) подряд неудач/недоступностей —
+     статус задачи переводится в `error`, поток завершается.
+6. `POST /api/maps/job/stop` ставит статус `stopped`, сигналит
+   `threading.Event` (проверяется в `stop_event.wait(interval)`, поэтому
+   реакция на Stop почти мгновенная, а не ждет следующего полного интервала),
+   и пытается удалить текущую job на стороне gmaps.
+7. При рестарте Flask-процесса живых потоков не остается — `reset_stale_jobs()`
+   (вызывается в `create_app()`) переводит все "зависшие" `running`-записи в
+   `stopped`, чтобы UI не показывал несуществующий активный job.
+
+### 20.5. Контракт с gmaps API — то, что легко перепутать
+
+`gmaps_client.py` собирает payload по структуре `JobData` из исходников
+`gosom/google-maps-scraper` (`web/job.go`), а не по их (частично неточной)
+OpenAPI-спеке. Практические нюансы:
+
+- Поля ответа приходят с заглавной буквы (`Status`, `ID`, ...), а не
+  `status`/`id`, как можно ожидать по спеке — отсюда `pick(payload, *names)`,
+  который матчит имя поля без учета регистра.
+- `grid_bbox`, `grid_cell`, `concurrency` — CLI-only флаги; web API их
+  тихо игнорирует. Реальное city targeting делается через `lat`/`lon` (центр
+  bbox) + `radius` (до угла bbox) — это единственный способ ограничить поиск
+  городом через HTTP API на сегодняшний день.
+- `max_time` и `lang` (ровно 2 буквы) обязательны на стороне Go
+  (`JobData.Validate()`) — если код когда-нибудь начнет пропускать эти поля,
+  gmaps ответит `422`, а не тихо создаст job с дефолтами.
+- `normalize_lang(...)` в `gmaps_client.py` **не обрезает** язык до 2 символов
+  простым slice — обрезка `"xyz"[:2]` дала бы правдоподобный, но неверный код
+  `"xy"`. Вместо этого мусорные значения превращаются в `"en"`, а локали вида
+  `es-ES`/`es_ES` сводятся к базовому языку.
+
+### 20.6. Изоляция по аккаунтам
+
+Все Maps-таблицы (`maps_jobs`, `maps_domains`, `maps_proxies`,
+`maps_domain_sessions`) содержат `owner_id`, и каждый роут в `maps_routes.py`
+берет его из текущей сессии (`_owner_id()` -> `auth.current_user()["id"]`) и
+подмешивает в каждый SQL-запрос. Domain Checker/Domain DB/DR Checker этой
+изоляции **не имеют** — это единственная часть приложения, где данные реально
+разделены между аккаунтами одного и того же процесса.
+
+## 21. Что менять, если нужны доработки Auth/Maps
+
+- поменять правила валидации email/пароля при регистрации -> `auth.py`
+  (`EMAIL_RE`, `MIN_PASSWORD_LENGTH`)
+- добавить новый публичный (без логина) endpoint -> `auth.PUBLIC_ENDPOINTS`
+- поменять логику одного цикла скрейпинга -> `maps_service._maps_poll_loop`
+- поменять то, что отправляется во внешний gmaps API -> `gmaps_client.build_payload`
+- поменять правила нормализации/фильтрации найденных доменов ->
+  `maps_service.normalize_domain`, `maps_service._matches_tld_filter`
+- поменять источник bbox или закешировать иначе -> `geo_data.fetch_bbox`
+- добавить новую нишу или страну -> `app/data/niches.json` / `app/data/geo.json`
+  (геоданные пересобираются скриптом, не редактируются руками — см. README)
+- поменять схему БД -> `db.py` (`SCHEMA` + добавить миграцию в `init_db()`,
+  не менять существующие таблицы "на месте" без миграционного пути)
