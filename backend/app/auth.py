@@ -1,5 +1,6 @@
 """Аутентификация: сессии Flask + хеши паролей werkzeug."""
 
+import logging
 import re
 from datetime import datetime, timezone
 from functools import wraps
@@ -8,6 +9,8 @@ from flask import Blueprint, jsonify, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -74,12 +77,11 @@ def seed_admin(app):
         (email, generate_password_hash(password), _now_iso()),
     )
 
-    # The password is deliberately not echoed — on a server this goes to the logs.
-    print("=" * 62)
-    print(f"  Seeded the default account: {email}")
-    print("  Its password is the SEED_ADMIN_PASSWORD value. Change it after")
-    print("  the first login.")
-    print("=" * 62)
+    # The password is deliberately not logged.
+    logger.warning(
+        "Seeded the default account %s from SEED_ADMIN_PASSWORD. Change this "
+        "password after the first login.", email,
+    )
 
 
 def register_auth(app):

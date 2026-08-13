@@ -4,6 +4,7 @@ Servers run the app through wsgi.py; this module exists so `python run.py`
 still starts something usable while developing.
 """
 
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -21,7 +22,8 @@ if __name__ == "__main__":
     host = app.config.get("HOST", "0.0.0.0")
     port = app.config.get("PORT", 8080)
 
-    print(f"Starting Domain Checker on http://{host}:{port}")
+    # create_app() has configured logging by now
+    logging.getLogger(__name__).info("Starting Domain Checker on http://%s:%s", host, port)
     app.run(
         host=host,
         port=port,

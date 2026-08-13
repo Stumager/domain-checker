@@ -32,6 +32,7 @@ class BaseAppTestCase(unittest.TestCase):
     def create_app_and_client(self, login=True, **overrides):
         config = {
             "TESTING": True,
+            "LOG_LEVEL": "WARNING",
             "FINAL_CHECK_ENABLED": True,
             "DEFAULT_TLDS": "com",
             "SECRET_KEY": "test-secret",

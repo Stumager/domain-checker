@@ -1,6 +1,7 @@
 """Гео-данные для модуля Maps: страны/города, язык страны и bbox через Nominatim."""
 
 import json
+import logging
 import math
 import os
 import threading
@@ -9,6 +10,8 @@ from datetime import datetime, timezone
 import requests
 
 from .. import db
+
+logger = logging.getLogger(__name__)
 
 _CACHE_LOCK = threading.Lock()
 _GEO_CACHE = None
@@ -106,6 +109,9 @@ def warm_language_cache():
 
         data = CountryInfo().all() or {}
     except Exception:
+        # Not fatal: default_language() falls back to "en" per country, but the
+        # Maps job then scrapes in the wrong language, so make it visible.
+        logger.warning("countryinfo unavailable — country languages will fall back to 'en'", exc_info=True)
         data = {}
 
     by_name, by_iso = {}, {}
@@ -230,7 +236,8 @@ def fetch_bbox(city: str, country: str):
         )
         response.raise_for_status()
         payload = response.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Nominatim lookup failed for %s, %s: %s", city, country, exc)
         return None
 
     if not payload:

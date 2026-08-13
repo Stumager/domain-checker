@@ -8,6 +8,7 @@ from flask_cors import CORS
 from config import Config as DefaultConfig
 
 from . import services
+from .logging_setup import configure_logging
 from .models import CheckerState
 from .utils import split_list
 
@@ -42,6 +43,7 @@ def create_app(config=None):
         else:
             app.config.from_object(config)
 
+    configure_logging(app.config.get("LOG_LEVEL", "INFO"))
     _require_secret_key(app)
 
     cors_origins = split_list(app.config.get("CORS_ORIGINS", ""))

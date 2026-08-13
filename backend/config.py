@@ -22,6 +22,8 @@ class Config:
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "0") == "1"
 
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip()
+
     # RDAP settings
     RDAP_BOOTSTRAP_URL = os.getenv("RDAP_BOOTSTRAP_URL", "https://data.iana.org/rdap/dns.json")
     FINAL_CHECK_ENABLED = os.getenv("FINAL_CHECK_ENABLED", "1") == "1"

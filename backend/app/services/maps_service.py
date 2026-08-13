@@ -6,6 +6,7 @@
 import csv
 import io
 import json
+import logging
 import re
 import threading
 from datetime import datetime, timezone
@@ -25,6 +26,8 @@ from .gmaps_client import (
     pick,
 )
 from .gmaps_client import set_config as set_client_config
+
+logger = logging.getLogger(__name__)
 
 _REGISTRY_LOCK = threading.Lock()
 _STOP_EVENTS = {}
@@ -335,6 +338,7 @@ def _start_next_cycle(job_id: int, owner_id=None) -> str:
 
 
 def _fail_job(job_id: int):
+    logger.error("Maps job %s gave up after %s consecutive failures", job_id, MAX_CONSECUTIVE_FAILURES)
     db.execute("UPDATE maps_jobs SET status = 'error' WHERE id = ?", (job_id,))
 
 
@@ -356,8 +360,12 @@ def _maps_poll_loop(job_id: int, gmaps_job_id: str, owner_id=None):
 
             try:
                 status = str(pick(get_gmaps_job(current_id), "status") or "").strip().lower()
-            except (GmapsUnavailable, GmapsError):
+            except (GmapsUnavailable, GmapsError) as exc:
                 failures += 1
+                logger.warning(
+                    "Maps job %s: status poll failed (%s/%s): %s",
+                    job_id, failures, MAX_CONSECUTIVE_FAILURES, exc,
+                )
                 if failures >= MAX_CONSECUTIVE_FAILURES:
                     _fail_job(job_id)
                     break
@@ -370,11 +378,17 @@ def _maps_poll_loop(job_id: int, gmaps_job_id: str, owner_id=None):
             if status == "ok":
                 failures = 0
                 try:
-                    ingest_csv(download_gmaps_csv(current_id), job)
-                except (GmapsUnavailable, GmapsError):
-                    pass
+                    added = ingest_csv(download_gmaps_csv(current_id), job)
+                    logger.info("Maps job %s: cycle done, %s new domain(s)", job_id, added)
+                except (GmapsUnavailable, GmapsError) as exc:
+                    # The cycle still counts as complete — only the results are lost.
+                    logger.warning("Maps job %s: could not download results: %s", job_id, exc)
             elif status == "failed":
                 failures += 1
+                logger.warning(
+                    "Maps job %s: scraper reported failure (%s/%s)",
+                    job_id, failures, MAX_CONSECUTIVE_FAILURES,
+                )
                 if failures >= MAX_CONSECUTIVE_FAILURES:
                     _fail_job(job_id)
                     break

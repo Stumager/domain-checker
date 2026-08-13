@@ -630,6 +630,7 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8080` | HTTP port |
 | `DEBUG` | `False` | Enable Flask debug mode |
+| `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` — logs go to stdout |
 | `SESSION_COOKIE_SECURE` | `0` | Set to `1` when serving over HTTPS |
 | `CORS_ORIGINS` | _(empty)_ | Comma-separated allowed CORS origins; empty = disabled |
 | `MAX_DOMAINS` | `200000` | Max domains accepted per scan request |
