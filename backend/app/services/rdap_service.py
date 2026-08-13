@@ -11,8 +11,7 @@ from urllib.parse import quote
 import requests
 from requests.adapters import HTTPAdapter
 
-from ..utils import normalize_domain, is_valid_domain, to_ascii, dedupe
-from ..models import CheckerState
+from ..utils import normalize_domain, is_valid_domain, to_ascii
 
 # Configuration (will be injected from config)
 RDAP_BOOTSTRAP_URL = "https://data.iana.org/rdap/dns.json"

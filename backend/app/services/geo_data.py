@@ -1,15 +1,17 @@
 """Гео-данные для модуля Maps: страны/города, язык страны и bbox через Nominatim."""
 
 import json
+import logging
 import math
 import os
-import sys
 import threading
-from datetime import datetime, timezone
 
 import requests
 
 from .. import db
+from ..utils import apply_config, now_iso
+
+logger = logging.getLogger(__name__)
 
 _CACHE_LOCK = threading.Lock()
 _GEO_CACHE = None
@@ -31,21 +33,11 @@ class GeoDataMissing(RuntimeError):
 
 
 def set_config(config: dict):
-    for key, value in (config or {}).items():
-        if value not in (None, ""):
-            _CONFIG[key] = value
+    apply_config(_CONFIG, config, source="geo_data")
 
 
 def _data_dir() -> str:
-    """Каталог app/data — с учётом запуска из собранного exe."""
-    if getattr(sys, "frozen", False):
-        for base in (getattr(sys, "_MEIPASS", ""), os.path.dirname(sys.executable)):
-            if not base:
-                continue
-            candidate = os.path.join(base, "app", "data")
-            if os.path.isdir(candidate):
-                return candidate
-
+    """Каталог app/data."""
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 
 
@@ -89,17 +81,6 @@ def find_country(name_or_code: str):
     return None
 
 
-def find_city(country: dict, city_name: str):
-    needle = (city_name or "").strip().casefold()
-    if not country or not needle:
-        return None
-
-    for city in country.get("cities") or []:
-        if city["name"].casefold() == needle:
-            return city
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Язык страны
 # ---------------------------------------------------------------------------
@@ -116,32 +97,41 @@ def _first_two_letter(languages) -> str:
 def warm_language_cache():
     """Разобрать весь справочник countryinfo разом.
 
-    CountryInfo().all() занимает ~6 секунд (тянет geoJSON), поэтому вызывается
-    один раз в фоновом потоке, а не на запросе.
+    Дёшево (десятки миллисекунд), поэтому вызывается синхронно на старте.
     """
     global _LANG_WARMED
 
     try:
-        from countryinfo import CountryInfo
+        from countryinfo import all_countries
 
-        data = CountryInfo().all() or {}
+        countries = all_countries() or []
     except Exception:
-        data = {}
+        # Not fatal: default_language() falls back to "en" per country, but the
+        # Maps job then scrapes in the wrong language, so make it visible.
+        logger.warning("countryinfo unavailable — country languages will fall back to 'en'", exc_info=True)
+        countries = []
 
     by_name, by_iso = {}, {}
-    for key, info in data.items():
-        if not isinstance(info, dict):
+    for country in countries:
+        try:
+            info = country.info() or {}
+        except Exception:
             continue
 
         lang = _first_two_letter(info.get("languages"))
         if not lang:
             continue
 
-        by_name[str(key).casefold()] = lang
-
         name = (info.get("name") or "").strip()
         if name:
             by_name[name.casefold()] = lang
+
+        # geo.json (dr5hn) and countryinfo do not always spell a country the
+        # same way, so index the alternates too rather than falling back to "en".
+        for alternate in info.get("altSpellings") or []:
+            token = str(alternate or "").strip()
+            if len(token) > 2:
+                by_name.setdefault(token.casefold(), lang)
 
         iso2 = ((info.get("ISO") or {}).get("alpha2") or "").strip().upper()
         if iso2:
@@ -151,14 +141,6 @@ def warm_language_cache():
         _LANG_BY_NAME.update(by_name)
         _LANG_BY_ISO.update(by_iso)
         _LANG_WARMED = True
-
-
-def start_language_warmup():
-    threading.Thread(target=warm_language_cache, daemon=True).start()
-
-
-def language_ready() -> bool:
-    return _LANG_WARMED
 
 
 def default_language(country_name: str, country_code: str = "") -> str:
@@ -206,10 +188,6 @@ def geo_with_languages():
 # Bounding box через Nominatim (с кэшем в БД)
 # ---------------------------------------------------------------------------
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
 def _cached_bbox(city: str, country: str):
     row = db.query_one(
         "SELECT bbox FROM maps_bbox_cache WHERE city = ? AND country = ?",
@@ -229,7 +207,7 @@ def _cached_bbox(city: str, country: str):
 def _store_bbox(city: str, country: str, bbox):
     db.execute(
         "INSERT OR REPLACE INTO maps_bbox_cache (city, country, bbox, cached_at) VALUES (?, ?, ?, ?)",
-        (city.casefold(), country.casefold(), json.dumps(bbox), _now_iso()),
+        (city.casefold(), country.casefold(), json.dumps(bbox), now_iso()),
     )
 
 
@@ -254,7 +232,8 @@ def fetch_bbox(city: str, country: str):
         )
         response.raise_for_status()
         payload = response.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Nominatim lookup failed for %s, %s: %s", city, country, exc)
         return None
 
     if not payload:

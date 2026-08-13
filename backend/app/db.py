@@ -7,7 +7,6 @@
 
 import os
 import sqlite3
-import sys
 import threading
 from contextlib import contextmanager
 
@@ -94,10 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_maps_domain_sessions_job ON maps_domain_sessions(
 
 def default_db_path() -> str:
     """Путь к базе по умолчанию — backend/data/maps.db."""
-    if getattr(sys, "frozen", False):
-        base = os.path.dirname(sys.executable)
-    else:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, "data", "maps.db")
 
 

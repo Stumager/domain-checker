@@ -6,12 +6,13 @@
 import csv
 import io
 import json
+import logging
 import re
 import threading
-from datetime import datetime, timezone
 
 from .. import db
-from ..utils import normalize_domain as _strip_url, parse_tlds
+from ..utils import apply_config, now_iso, parse_tlds
+from ..utils import normalize_domain as _strip_url
 from . import geo_data
 from .gmaps_client import (
     GmapsError,
@@ -25,6 +26,8 @@ from .gmaps_client import (
     pick,
 )
 from .gmaps_client import set_config as set_client_config
+
+logger = logging.getLogger(__name__)
 
 _REGISTRY_LOCK = threading.Lock()
 _STOP_EVENTS = {}
@@ -51,15 +54,9 @@ __all__ = [
 
 def set_config(config: dict):
     """Настройки поллинга остаются здесь, остальное уходит в клиент."""
-    for key, value in (config or {}).items():
-        if key in _CONFIG and value not in (None, ""):
-            _CONFIG[key] = value
-
+    # One dict feeds both halves, so neither warns about the other's keys.
+    apply_config(_CONFIG, config, source="maps_service", warn_unknown=False)
     set_client_config(config)
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +100,7 @@ def ingest_csv(text: str, job: dict) -> int:
     if not batch:
         return 0
 
-    discovered_at = _now_iso()
+    discovered_at = now_iso()
     added = 0
     with db.get_connection() as conn:
         for domain, business_name in batch.items():
@@ -258,7 +255,7 @@ def start_job(params: dict, owner_id=1) -> dict:
             float(params.get("grid_cell") or _CONFIG["GMAPS_DEFAULT_GRID_CELL"]),
             int(params.get("zoom") or _CONFIG["GMAPS_DEFAULT_ZOOM"]),
             custom_query,
-            _now_iso(),
+            now_iso(),
             json.dumps(bbox),
             len(cells),
         ),
@@ -273,7 +270,7 @@ def start_job(params: dict, owner_id=1) -> dict:
 
     db.execute(
         "UPDATE maps_jobs SET gmaps_job_id = ?, last_run_at = ? WHERE id = ?",
-        (gmaps_job_id, _now_iso(), job_id),
+        (gmaps_job_id, now_iso(), job_id),
     )
 
     _stop_event(job_id).clear()
@@ -313,7 +310,7 @@ def _start_next_cycle(job_id: int, owner_id=None) -> str:
         gmaps_job_id = create_gmaps_job(build_payload(job, bbox))
         db.execute(
             "UPDATE maps_jobs SET gmaps_job_id = ?, last_run_at = ? WHERE id = ?",
-            (gmaps_job_id, _now_iso(), job_id),
+            (gmaps_job_id, now_iso(), job_id),
         )
         return gmaps_job_id
 
@@ -329,12 +326,13 @@ def _start_next_cycle(job_id: int, owner_id=None) -> str:
     gmaps_job_id = create_gmaps_job(build_payload(job, cells[completed]))
     db.execute(
         "UPDATE maps_jobs SET gmaps_job_id = ?, last_run_at = ? WHERE id = ?",
-        (gmaps_job_id, _now_iso(), job_id),
+        (gmaps_job_id, now_iso(), job_id),
     )
     return gmaps_job_id
 
 
 def _fail_job(job_id: int):
+    logger.error("Maps job %s gave up after %s consecutive failures", job_id, MAX_CONSECUTIVE_FAILURES)
     db.execute("UPDATE maps_jobs SET status = 'error' WHERE id = ?", (job_id,))
 
 
@@ -356,8 +354,12 @@ def _maps_poll_loop(job_id: int, gmaps_job_id: str, owner_id=None):
 
             try:
                 status = str(pick(get_gmaps_job(current_id), "status") or "").strip().lower()
-            except (GmapsUnavailable, GmapsError):
+            except (GmapsUnavailable, GmapsError) as exc:
                 failures += 1
+                logger.warning(
+                    "Maps job %s: status poll failed (%s/%s): %s",
+                    job_id, failures, MAX_CONSECUTIVE_FAILURES, exc,
+                )
                 if failures >= MAX_CONSECUTIVE_FAILURES:
                     _fail_job(job_id)
                     break
@@ -370,11 +372,17 @@ def _maps_poll_loop(job_id: int, gmaps_job_id: str, owner_id=None):
             if status == "ok":
                 failures = 0
                 try:
-                    ingest_csv(download_gmaps_csv(current_id), job)
-                except (GmapsUnavailable, GmapsError):
-                    pass
+                    added = ingest_csv(download_gmaps_csv(current_id), job)
+                    logger.info("Maps job %s: cycle done, %s new domain(s)", job_id, added)
+                except (GmapsUnavailable, GmapsError) as exc:
+                    # The cycle still counts as complete — only the results are lost.
+                    logger.warning("Maps job %s: could not download results: %s", job_id, exc)
             elif status == "failed":
                 failures += 1
+                logger.warning(
+                    "Maps job %s: scraper reported failure (%s/%s)",
+                    job_id, failures, MAX_CONSECUTIVE_FAILURES,
+                )
                 if failures >= MAX_CONSECUTIVE_FAILURES:
                     _fail_job(job_id)
                     break

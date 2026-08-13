@@ -1,0 +1,7 @@
+-r requirements.txt
+
+pytest==9.1.1
+
+# Browser tests (tests/test_e2e.py). After installing, fetch the browser once:
+#   python -m playwright install chromium
+pytest-playwright==0.7.1

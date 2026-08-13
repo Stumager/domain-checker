@@ -3,9 +3,8 @@
 import socket
 import time
 import threading
-from typing import Optional
 
-from ..utils import normalize_domain, is_valid_domain, to_ascii
+from ..utils import apply_config, normalize_domain, is_valid_domain, to_ascii
 
 # Try to import dnspython for advanced DNS checking
 try:
@@ -17,21 +16,37 @@ except Exception:
 
 _dns_thread_local = threading.local()
 
+# Injected from the app factory: the check runs in worker threads with no
+# app context, so current_app is not available here.
+_CONFIG = {
+    "DNS_RESOLVERS": ["1.1.1.1", "8.8.8.8"],
+    "DNS_TIMEOUT": 1.6,
+    "DNS_RETRIES": 2,
+}
+
+
+def set_config(config: dict):
+    apply_config(_CONFIG, config, source="dns_checker")
+
 
 def _get_dns_resolver(timeout: float):
-    """Get or create a thread-local DNS resolver with preset nameservers."""
+    """Get or create a thread-local resolver bound to the configured nameservers."""
+    nameservers = list(_CONFIG["DNS_RESOLVERS"])
+
     r = getattr(_dns_thread_local, "resolver", None)
-    if r is None:
+    # Rebuild when the configured nameservers changed under us
+    if r is None or r.nameservers != nameservers:
         r = dns.resolver.Resolver(configure=False)
-        r.nameservers = ["1.1.1.1", "8.8.8.8"]
+        r.nameservers = nameservers
         _dns_thread_local.resolver = r
+
     # Keep timeouts up to date on each use
     r.lifetime = timeout
     r.timeout = min(1.2, max(0.4, timeout / 2))
     return r
 
 
-def _dns_check_dnspython(domain: str, retries: int = 2, timeout: float = 1.6) -> str:
+def _dns_check_dnspython(domain: str, retries: int, timeout: float) -> str:
     """Check DNS using dnspython library"""
     domain = normalize_domain(domain)
     if not is_valid_domain(domain):
@@ -87,7 +102,7 @@ def _dns_check_dnspython(domain: str, retries: int = 2, timeout: float = 1.6) ->
     return "unknown"
 
 
-def _dns_check_socket(domain: str, retries: int = 2) -> str:
+def _dns_check_socket(domain: str, retries: int) -> str:
     """Check DNS using socket (fallback)"""
     domain = normalize_domain(domain)
     if not is_valid_domain(domain):
@@ -119,6 +134,7 @@ def dns_check(domain: str) -> str:
     Returns:
         str: "available" | "taken" | "invalid" | "error" | "unknown"
     """
+    retries = int(_CONFIG["DNS_RETRIES"])
     if HAS_DNSPYTHON:
-        return _dns_check_dnspython(domain)
-    return _dns_check_socket(domain)
+        return _dns_check_dnspython(domain, retries, float(_CONFIG["DNS_TIMEOUT"]))
+    return _dns_check_socket(domain, retries)

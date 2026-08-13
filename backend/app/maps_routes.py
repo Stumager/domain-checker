@@ -1,7 +1,7 @@
 """Flask API модуля Maps Scraper."""
 
 import io
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -10,6 +10,7 @@ from .auth import current_user
 from .services import geo_data, maps_service, proxy_service
 from .services.geo_data import GeoDataMissing
 from .services.maps_service import GmapsError, GmapsUnavailable
+from .utils import escape_like, now_iso
 
 maps_bp = Blueprint("maps", __name__, url_prefix="/api/maps")
 
@@ -22,9 +23,8 @@ def _owner_id():
 
 
 def _like(value: str) -> str:
-    """Экранировать спецсимволы LIKE, чтобы поиск не срабатывал как шаблон."""
-    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
+    """Обернуть экранированный поисковый запрос в LIKE-шаблон."""
+    return f"%{escape_like(value)}%"
 
 
 # Достаёт часть домена после последней точки средствами SQLite
@@ -251,7 +251,7 @@ def export_domains():
     if rows:
         db.execute(
             f"UPDATE maps_domains SET exported_at = ?{where}",
-            (datetime.now(timezone.utc).isoformat(timespec="seconds"), *params),
+            (now_iso(), *params),
         )
 
     mem_file.seek(0)

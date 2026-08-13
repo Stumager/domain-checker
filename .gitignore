@@ -10,7 +10,6 @@ ENV/
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Python
 __pycache__/
@@ -33,6 +32,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
 
 # Flask
 instance/
@@ -42,24 +42,17 @@ instance/
 *.tmp
 *.bak
 *.log
-*.txt
-!requirements.txt
-!README.txt
 
 # OS
 Thumbs.db
 .DS_Store
-
-# Windows artifacts
-*.exe
-*.lnk
 
 # Environment
 .env
 .env.local
 .env.*.local
 
-# Results (optional)
+# Scan result downloads
 available.txt
 taken.txt
 invalid.txt
@@ -72,6 +65,3 @@ errors.txt
 
 # Internal dev notes
 PROGRESS.md
-
-# Dead legacy folder
-frontend/

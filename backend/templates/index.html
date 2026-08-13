@@ -13,7 +13,7 @@
         <div class="header">
             <h1>Domain Checker</h1>
             <p>DNS prefilter (NS/SOA) · RDAP verify · Web Archive history</p>
-            <button type="button" class="maps-toggle-link" id="logoutBtn" onclick="authLogout()">Sign out</button>
+            <button type="button" class="maps-toggle-link" id="logoutBtn" data-action="authLogout" >Sign out</button>
         </div>
 
         <div class="tab-nav">
@@ -73,9 +73,9 @@
                 </div>
 
                 <div class="buttons">
-                    <button type="button" class="btn-primary" id="startBtn" onclick="startCheck()">Start check</button>
-                    <button type="button" class="btn-stop" id="stopBtn" onclick="stopCheck()" style="display:none">Stop</button>
-                    <button type="button" class="btn-indigo" onclick="toggleArchiveModal()">Web Archive</button>
+                    <button type="button" class="btn-primary" id="startBtn" data-action="startCheck" >Start check</button>
+                    <button type="button" class="btn-stop" id="stopBtn" data-action="stopCheck" style="display:none">Stop</button>
+                    <button type="button" class="btn-indigo" data-action="toggleArchiveModal" >Web Archive</button>
                 </div>
 
                 <div class="progress-section" id="progressSection">
@@ -111,34 +111,34 @@
                         <div class="result-card available">
                             <h3>Available</h3>
                             <div class="result-count" id="resultAvailable">0</div>
-                            <button type="button" class="download-btn" onclick="downloadResult('available')">
+                            <button type="button" class="download-btn" data-action="downloadResult" data-arg="available" >
                                 Download
                             </button>
                         </div>
                         <div class="result-card taken">
                             <h3>Taken</h3>
                             <div class="result-count" id="resultTaken">0</div>
-                            <button type="button" class="download-btn" onclick="downloadResult('taken')">
+                            <button type="button" class="download-btn" data-action="downloadResult" data-arg="taken" >
                                 Download
                             </button>
                         </div>
                         <div class="result-card invalid">
                             <h3>Invalid</h3>
                             <div class="result-count" id="resultInvalid">0</div>
-                            <button type="button" class="download-btn" onclick="downloadResult('invalid')">
+                            <button type="button" class="download-btn" data-action="downloadResult" data-arg="invalid" >
                                 Download
                             </button>
                         </div>
                         <div class="result-card errors">
                             <h3>Errors</h3>
                             <div class="result-count" id="resultErrors">0</div>
-                            <button type="button" class="download-btn" onclick="downloadResult('errors')">
+                            <button type="button" class="download-btn" data-action="downloadResult" data-arg="errors" >
                                 Download
                             </button>
                         </div>
                     </div>
                     <div class="results-download-all">
-                        <button type="button" class="btn-primary" onclick="downloadAllResults()">
+                        <button type="button" class="btn-primary" data-action="downloadAllResults" >
                             Export all as ZIP
                         </button>
                     </div>
@@ -151,20 +151,20 @@
                         <span class="db-new-summary" id="dbNewSummary"></span>
                     </div>
                     <div class="db-sub-tabs">
-                        <button type="button" class="db-sub-tab active" data-subtab="new" onclick="dbSwitchSubTab('new')">
+                        <button type="button" class="db-sub-tab active" data-subtab="new" data-action="dbSwitchSubTab" data-arg="new" >
                             New (<span id="dbNewCount">0</span>)
                         </button>
-                        <button type="button" class="db-sub-tab" data-subtab="known" onclick="dbSwitchSubTab('known')">
+                        <button type="button" class="db-sub-tab" data-subtab="known" data-action="dbSwitchSubTab" data-arg="known" >
                             Known (<span id="dbKnownCount">0</span>)
                         </button>
                     </div>
                     <div id="dbNewList" class="db-comparison-list"></div>
                     <div id="dbKnownList" class="db-comparison-list" style="display:none"></div>
                     <div class="db-new-actions">
-                        <button type="button" class="btn-primary" id="dbAddNewBtn" onclick="dbAddNewToBucket()">
+                        <button type="button" class="btn-primary" id="dbAddNewBtn" data-action="dbAddNewToBucket" >
                             + Add new to DB
                         </button>
-                        <button type="button" class="db-secondary-btn" onclick="dbCopyNew()">
+                        <button type="button" class="db-secondary-btn" data-action="dbCopyNew" >
                             Copy new
                         </button>
                     </div>
@@ -202,10 +202,10 @@
                                 <span id="dbBucketUpdated"></span>
                             </div>
                             <div class="db-bucket-actions">
-                                <button type="button" class="db-export-btn" onclick="dbExportTld()">
+                                <button type="button" class="db-export-btn" data-action="dbExportTld" >
                                     Export
                                 </button>
-                                <button type="button" class="db-clear-btn" onclick="dbClearTld()">
+                                <button type="button" class="db-clear-btn" data-action="dbClearTld" >
                                     Clear
                                 </button>
                             </div>
@@ -213,7 +213,7 @@
 
                         <div class="db-upload-zone" id="dbUploadZone">
                             <textarea id="dbPasteArea" placeholder="Paste domains — one per line or comma-separated&#10;Accepts: http://domain.com, www.example.net, plain names…"></textarea>
-                            <button type="button" class="btn-primary" onclick="dbImportFromPaste()">
+                            <button type="button" class="btn-primary" data-action="dbImportFromPaste" >
                                 Add to bucket
                             </button>
                         </div>
@@ -222,14 +222,13 @@
 
                         <div class="db-search-row">
                             <input type="text" id="dbSearchInput"
-                                   placeholder="Search in this bucket…"
-                                   oninput="dbSearch(this.value)">
+                                   placeholder="Search in this bucket…">
                         </div>
 
                         <div class="db-domain-list" id="dbDomainList"></div>
 
                         <div id="dbLoadMore" style="display:none; padding:10px 0;">
-                            <button type="button" class="db-load-more-btn" onclick="dbLoadMoreDomains()">
+                            <button type="button" class="db-load-more-btn" data-action="dbLoadMoreDomains" >
                                 Load more
                             </button>
                         </div>
@@ -247,15 +246,15 @@
                     <textarea id="drInput" placeholder="One domain per line"></textarea>
                 </div>
                 <div class="buttons">
-                    <button type="button" class="btn-primary" id="drStartBtn" onclick="drStartCheck()">Check DR</button>
-                    <button type="button" class="btn-stop" id="drStopBtn" onclick="drStop()" style="display:none">Stop</button>
+                    <button type="button" class="btn-primary" id="drStartBtn" data-action="drStartCheck" >Check DR</button>
+                    <button type="button" class="btn-stop" id="drStopBtn" data-action="drStop" style="display:none">Stop</button>
                 </div>
                 <div id="drProgress" style="display:none; margin-top:8px; color:var(--text-muted, #9ca3af)">
                     <span id="drProgressText"></span>
                 </div>
                 <div id="drResultsSection" style="display:none; margin-top:16px">
                     <div id="drExportRow" style="display:none; margin-bottom:10px">
-                        <button type="button" class="btn-primary" onclick="drExportCsv()">Export CSV</button>
+                        <button type="button" class="btn-primary" data-action="drExportCsv" >Export CSV</button>
                     </div>
                     <table class="archive-table" id="drTable">
                         <thead>
@@ -281,9 +280,9 @@
                 <div class="maps-grid">
                     <div class="form-group">
                         <div class="maps-label-row">
-                            <label for="mapsNiche">Niche <span class="maps-help" title="Категория бизнеса для поиска в Google Maps.">?</span></label>
+                            <label for="mapsNiche">Niche <span class="maps-help" title="Business category to search for on Google Maps.">?</span></label>
                             <button type="button" class="maps-toggle-link" id="mapsNicheToggle"
-                                    onclick="mapsOnNicheChange()">manual <span class="maps-help" title="Переключает список ниш и ручной ввод произвольной ниши.">?</span></button>
+                                    data-action="mapsOnNicheChange" >manual <span class="maps-help" title="Switch between the niche dropdown and free-text entry.">?</span></button>
                         </div>
                         <select id="mapsNiche" title="Business category used to build the search query"></select>
                         <input type="text" id="mapsNicheManual" style="display:none"
@@ -292,7 +291,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="mapsCountry">Country <span class="maps-help" title="Страна, в которой будет выполняться поиск.">?</span></label>
+                        <label for="mapsCountry">Country <span class="maps-help" title="Country the search runs in.">?</span></label>
                         <input type="text" id="mapsCountry" list="mapsCountryOptions"
                                placeholder="Start typing a country..." autocomplete="off"
                                title="Country from the bundled dataset">
@@ -300,7 +299,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="mapsCity">City <span class="maps-help" title="Город поиска и географическая область запроса.">?</span></label>
+                        <label for="mapsCity">City <span class="maps-help" title="City to search, and the geographic area of the query.">?</span></label>
                         <input type="text" id="mapsCity" list="mapsCityOptions"
                                placeholder="Start typing a city..." autocomplete="off"
                                title="City — the bounding box is resolved via Nominatim">
@@ -308,7 +307,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="mapsLanguage">Language <span class="maps-help" title="Двухбуквенный язык Google Maps, например en, es или ru.">?</span></label>
+                        <label for="mapsLanguage">Language <span class="maps-help" title="Two-letter Google Maps language, e.g. en, es or ru.">?</span></label>
                         <input type="text" id="mapsLanguage" maxlength="2"
                                placeholder="en"
                                title="Two-letter language code sent to Google Maps. Auto-filled from the country, editable.">
@@ -317,15 +316,15 @@
 
                 <!-- 2. TLD filter + controls -->
                 <div class="form-group">
-                    <label for="mapsTldFilter">TLD filter <span class="maps-help" title="Оставляет только домены с указанными зонами. Несколько зон можно разделить запятой или пробелом.">?</span></label>
+                    <label for="mapsTldFilter">TLD filter <span class="maps-help" title="Keep only domains in these zones. Separate several with a comma or space.">?</span></label>
                     <input type="text" id="mapsTldFilter" placeholder="es, it, com — leave empty to keep all"
                            title="Only keep discovered domains ending with these TLDs. Empty = keep everything.">
                     <div class="input-hint">Comma- or space-separated. Applied to every scrape cycle before saving.</div>
                 </div>
 
                 <div class="buttons">
-                    <button type="button" class="btn-primary" id="mapsStartBtn" onclick="mapsStartJob()">Start scraping <span class="maps-help maps-help-dark" title="Создаёт новую сессию поиска и запускает её в scraper.">?</span></button>
-                    <button type="button" class="btn-stop" id="mapsStopBtn" onclick="mapsStopJob()" style="display:none">Stop <span class="maps-help maps-help-dark" title="Останавливает текущую активную сессию поиска.">?</span></button>
+                    <button type="button" class="btn-primary" id="mapsStartBtn" data-action="mapsStartJob" >Start scraping <span class="maps-help maps-help-dark" title="Create a new search session and start it in the scraper.">?</span></button>
+                    <button type="button" class="btn-stop" id="mapsStopBtn" data-action="mapsStopJob" style="display:none">Stop <span class="maps-help maps-help-dark" title="Stop the currently active search session.">?</span></button>
                 </div>
 
                 <!-- 3. Status bar -->
@@ -349,24 +348,24 @@
 
                 <!-- 4. Advanced settings -->
                 <div class="maps-collapsible" id="mapsAdvanced">
-                    <button type="button" class="maps-collapsible-head" title="Рабочие параметры REST API: глубина, масштаб и пользовательский запрос." onclick="mapsToggleSection('mapsAdvanced')">
+                    <button type="button" class="maps-collapsible-head" title="REST API tuning: depth, zoom and a custom query." data-action="mapsToggleSection" data-arg="mapsAdvanced" >
                         <span>Advanced Settings</span><span class="maps-caret">▼</span>
                     </button>
                     <div class="maps-collapsible-body">
                         <div class="maps-grid">
                             <div class="form-group">
-                            <label for="mapsDepth">depth <span class="maps-help" title="Глубина прокрутки результатов Google Maps. Большее значение даёт больше мест, но увеличивает время работы.">?</span></label>
+                            <label for="mapsDepth">depth <span class="maps-help" title="How far to scroll Google Maps results. Higher finds more places but takes longer.">?</span></label>
                                 <input type="number" id="mapsDepth" value="10" min="1" max="100"
                                        title="How far to scroll the Google Maps results list. Higher = more places, slower run.">
                             </div>
                             <div class="form-group">
-                            <label for="mapsZoom">zoom <span class="maps-help" title="Масштаб Google Maps, влияющий на область и детализацию поиска.">?</span></label>
+                            <label for="mapsZoom">zoom <span class="maps-help" title="Google Maps zoom level, which affects the search area and its detail.">?</span></label>
                                 <input type="number" id="mapsZoom" value="15" min="0" max="21"
                                        title="Google Maps zoom level (0–21). Lower zoom covers more area with less detail.">
                             </div>
                         </div>
                         <div class="form-group" style="margin-bottom:0">
-                            <label for="mapsCustomQuery">custom_query override <span class="maps-help" title="Полностью заменяет автоматический запрос вида «ниша в городе».">?</span></label>
+                            <label for="mapsCustomQuery">custom_query override <span class="maps-help" title="Replaces the automatic “niche in city” query entirely.">?</span></label>
                             <input type="text" id="mapsCustomQuery" placeholder="e.g. vegan restaurants in Madrid"
                                    title="Replaces the generated “{niche} in {city}” query entirely. Leave empty to use the generated one.">
                         </div>
@@ -375,7 +374,7 @@
 
                 <!-- 5. Proxy settings -->
                 <div class="maps-collapsible" id="mapsProxies">
-                    <button type="button" class="maps-collapsible-head" title="Настройка и проверка прокси, которые будут переданы scraper." onclick="mapsToggleSection('mapsProxies')">
+                    <button type="button" class="maps-collapsible-head" title="Set up and test the proxies handed to the scraper." data-action="mapsToggleSection" data-arg="mapsProxies" >
                         <span>Proxy Settings</span><span class="maps-caret">▼</span>
                     </button>
                     <div class="maps-collapsible-body">
@@ -385,11 +384,11 @@
                                       placeholder="One per line — ip:port, ip:port:user:pass or http://user:pass@ip:port"></textarea>
                         </div>
                         <div class="maps-proxy-actions">
-                            <button type="button" class="btn-primary" onclick="mapsAddProxies()">Add <span class="maps-help maps-help-dark" title="Сохраняет новые прокси в локальную базу.">?</span></button>
-                            <button type="button" class="btn-indigo" id="mapsCheckProxiesBtn" onclick="mapsCheckProxies()">Check All <span class="maps-help maps-help-dark" title="Проверяет все сохранённые прокси и помечает рабочие.">?</span></button>
+                            <button type="button" class="btn-primary" data-action="mapsAddProxies" >Add <span class="maps-help maps-help-dark" title="Save new proxies to the local database.">?</span></button>
+                            <button type="button" class="btn-indigo" id="mapsCheckProxiesBtn" data-action="mapsCheckProxies" >Check All <span class="maps-help maps-help-dark" title="Test every saved proxy and mark the working ones.">?</span></button>
                         </div>
                         <div class="maps-proxy-actions">
-                            <button type="button" class="maps-row-btn maps-clear-failed-btn" onclick="mapsClearFailedProxies()">Clear failed</button>
+                            <button type="button" class="maps-row-btn maps-clear-failed-btn" data-action="mapsClearFailedProxies" >Clear failed</button>
                         </div>
                         <div class="maps-proxy-toolbar">
                             <input type="search" id="mapsProxySearch" placeholder="Search proxy" aria-label="Search proxy">
@@ -415,26 +414,26 @@
                 <div class="maps-results">
                     <div class="db-sub-tabs">
                         <button type="button" class="db-sub-tab active" data-mapstab="domains"
-                                onclick="mapsSwitchSubTab('domains')">
+                                data-action="mapsSwitchSubTab" data-arg="domains" >
                             Domains (<span id="mapsDomainsCount">0</span>)
                         </button>
                         <button type="button" class="db-sub-tab" data-mapstab="export"
-                                onclick="mapsSwitchSubTab('export')">Export</button>
+                                data-action="mapsSwitchSubTab" data-arg="export" >Export</button>
                     </div>
 
                     <div id="mapsDomainsPane">
                         <div class="maps-filter-row">
                             <input type="text" id="mapsSearch" placeholder="Search domain or business…">
-                            <select id="mapsSessionSelect" title="Фильтр по сессии поиска"></select>
-                            <select id="mapsCountryFilter" title="Фильтр по стране"></select>
-                            <select id="mapsCityFilter" title="Фильтр по городу"></select>
-                            <select id="mapsStatusSelect" title="Показывать новые, уже выгруженные или все домены">
-                                <option value="new">Только новые</option>
-                                <option value="all">Все домены</option>
-                                <option value="exported">Уже выгруженные</option>
+                            <select id="mapsSessionSelect" title="Filter by search session"></select>
+                            <select id="mapsCountryFilter" title="Filter by country"></select>
+                            <select id="mapsCityFilter" title="Filter by city"></select>
+                            <select id="mapsStatusSelect" title="Show new, already exported, or all domains">
+                                <option value="new">New only</option>
+                                <option value="all">All domains</option>
+                                <option value="exported">Already exported</option>
                             </select>
-                            <select id="mapsTldSelect" title="Фильтр по TLD"></select>
-                            <label class="maps-active-filter"><input type="checkbox" id="mapsActiveOnly"> Только текущая сессия <span class="maps-help" title="Показывает домены, найденные активной в данный момент сессией.">?</span></label>
+                            <select id="mapsTldSelect" title="Filter by TLD"></select>
+                            <label class="maps-active-filter"><input type="checkbox" id="mapsActiveOnly"> Current session only <span class="maps-help" title="Show only domains found by the currently active session.">?</span></label>
                         </div>
                         <div class="maps-table-wrap">
                             <table class="archive-table">
@@ -460,8 +459,8 @@
                             Exports every domain matching the current search and TLD filter.
                         </div>
                         <div class="maps-export-row">
-                            <button type="button" class="btn-primary" onclick="mapsExportTxt()">Export TXT <span class="maps-help maps-help-dark" title="Скачать отфильтрованные домены в TXT и отметить их выгруженными.">?</span></button>
-                            <button type="button" class="btn-primary" onclick="mapsExportCsv()">Export CSV <span class="maps-help maps-help-dark" title="Скачать отфильтрованные домены в CSV и отметить их выгруженными.">?</span></button>
+                            <button type="button" class="btn-primary" data-action="mapsExportTxt" >Export TXT <span class="maps-help maps-help-dark" title="Download the filtered domains as TXT and mark them exported.">?</span></button>
+                            <button type="button" class="btn-primary" data-action="mapsExportCsv" >Export CSV <span class="maps-help maps-help-dark" title="Download the filtered domains as CSV and mark them exported.">?</span></button>
                         </div>
                     </div>
                 </div>
@@ -476,21 +475,19 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Web Archive — Domain History</h2>
-                <button type="button" class="modal-close-btn" onclick="toggleArchiveModal()">x</button>
+                <button type="button" class="modal-close-btn" data-action="toggleArchiveModal" >x</button>
             </div>
             <div class="modal-body">
                 <div class="archive-search">
                     <div class="archive-search-row">
                         <input type="text" id="archiveSearchInput"
-                               placeholder="Enter domain name…"
-                               onkeypress="handleArchiveKeyPress(event)">
-                        <button type="button" class="archive-search-btn" onclick="fetchWaybackData()">
+                               placeholder="Enter domain name…">
+                        <button type="button" class="archive-search-btn" data-action="fetchWaybackData" >
                             Search
                         </button>
                     </div>
                     <input type="text" id="archiveProxyInput"
-                           placeholder="Proxy (optional): ip:port or http://user:pass@ip:port"
-                           onkeypress="handleArchiveKeyPress(event)">
+                           placeholder="Proxy (optional): ip:port or http://user:pass@ip:port">
                 </div>
 
                 <div class="archive-meta">
@@ -522,6 +519,6 @@
 
     <div class="db-toast-container" id="dbToastContainer"></div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

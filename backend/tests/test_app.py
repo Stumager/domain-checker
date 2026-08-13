@@ -8,7 +8,9 @@ import time
 import unittest
 from pathlib import Path
 from threading import Event
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
+import requests
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -30,7 +32,7 @@ class BaseAppTestCase(unittest.TestCase):
     def create_app_and_client(self, login=True, **overrides):
         config = {
             "TESTING": True,
-            "BROWSER_MONITOR_ENABLED": False,
+            "LOG_LEVEL": "WARNING",
             "FINAL_CHECK_ENABLED": True,
             "DEFAULT_TLDS": "com",
             "SECRET_KEY": "test-secret",
@@ -67,10 +69,8 @@ class CheckerAppTests(BaseAppTestCase):
     def test_create_app_has_core_routes(self):
         client = self.create_client()
 
-        ping = client.post("/api/ping?session=test-browser")
         status = client.get("/api/status")
 
-        self.assertEqual(ping.status_code, 200)
         self.assertEqual(status.status_code, 200)
         self.assertIn("running", status.get_json())
 
@@ -139,19 +139,92 @@ class CheckerAppTests(BaseAppTestCase):
         self.assertEqual(response.mimetype, "application/zip")
 
 
+def _dr_response(status_code=200, rating=42):
+    """Stand-in for an Ahrefs reply."""
+    reply = Mock()
+    reply.status_code = status_code
+    reply.json.return_value = {"domain_rating": {"domain_rating": rating}}
+    return reply
+
+
+class DrCheckTests(BaseAppTestCase):
+
+    def test_batch_is_resolved_in_parallel(self):
+        client = self.create_client(DR_WORKERS=4)
+        domains = ["a.com", "b.com", "c.com", "d.com"]
+
+        with patch.object(routes.requests, "get", return_value=_dr_response(rating=17.4)) as mocked:
+            response = client.post("/api/dr-check", json={"domains": domains})
+
+        self.assertEqual(response.status_code, 200)
+        results = response.get_json()["results"]
+
+        self.assertEqual(mocked.call_count, len(domains))
+        self.assertEqual([r["domain"] for r in results], domains)
+        # 17.4 must come back rounded, the way the table renders it
+        self.assertEqual({r["dr"] for r in results}, {17})
+
+    def test_single_domain_form_still_works(self):
+        client = self.create_client()
+
+        with patch.object(routes.requests, "get", return_value=_dr_response(rating=8)):
+            response = client.post("/api/dr-check", json={"domain": "https://www.example.com/x"})
+
+        results = response.get_json()["results"]
+        self.assertEqual(len(results), 1)
+        # URL noise is stripped before the lookup
+        self.assertEqual(results[0]["domain"], "www.example.com")
+        self.assertEqual(results[0]["dr"], 8)
+
+    def test_rate_limit_is_retried_then_reported(self):
+        client = self.create_client(DR_RETRIES=1, DR_RETRY_BACKOFF=0)
+
+        with patch.object(routes.requests, "get", return_value=_dr_response(status_code=429)) as mocked:
+            response = client.post("/api/dr-check", json={"domains": ["a.com"]})
+
+        result = response.get_json()["results"][0]
+        self.assertEqual(mocked.call_count, 2)  # initial attempt + one retry
+        self.assertIsNone(result["dr"])
+        self.assertEqual(result["error"], "rate limited")
+
+    def test_one_failure_does_not_sink_the_batch(self):
+        client = self.create_client(DR_WORKERS=2)
+
+        def flaky(url, **kwargs):
+            if kwargs["params"]["target"] == "bad.com":
+                raise requests.Timeout()
+            return _dr_response(rating=55)
+
+        with patch.object(routes.requests, "get", side_effect=flaky):
+            response = client.post("/api/dr-check", json={"domains": ["good.com", "bad.com"]})
+
+        results = {r["domain"]: r for r in response.get_json()["results"]}
+        self.assertEqual(results["good.com"]["dr"], 55)
+        self.assertIsNone(results["bad.com"]["dr"])
+        self.assertEqual(results["bad.com"]["error"], "timeout")
+
+    def test_batch_over_the_cap_is_rejected(self):
+        client = self.create_client(DR_MAX_BATCH=2)
+
+        response = client.post("/api/dr-check", json={"domains": ["a.com", "b.com", "c.com"]})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Too many domains", response.get_json()["error"])
+
+    def test_empty_input_is_rejected(self):
+        client = self.create_client()
+
+        self.assertEqual(client.post("/api/dr-check", json={"domains": []}).status_code, 400)
+        self.assertEqual(client.post("/api/dr-check", json={"domain": "  "}).status_code, 400)
+        self.assertEqual(client.post("/api/dr-check", json={"domains": "a.com"}).status_code, 400)
+
+
 class AuthTests(BaseAppTestCase):
     def test_api_requires_login(self):
         client = self.create_client(login=False)
 
         self.assertEqual(client.get("/api/status").status_code, 401)
         self.assertEqual(client.get("/api/maps/niches").status_code, 401)
-
-    def test_ping_stays_public(self):
-        """BrowserMonitor убьёт процесс, если heartbeat начнёт получать 401."""
-        client = self.create_client(login=False)
-
-        self.assertEqual(client.post("/api/ping?session=x").status_code, 200)
-        self.assertEqual(client.post("/api/browser-disconnect?session=x").status_code, 200)
 
     def test_page_serves_login_form_when_anonymous(self):
         client = self.create_client(login=False)

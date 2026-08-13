@@ -1,13 +1,19 @@
 # Domain Checker
 
-A local desktop tool for bulk domain availability checking with DNS prefiltering,
+A self-hosted tool for bulk domain availability checking with DNS prefiltering,
 RDAP verification, Wayback Machine history analysis, spam detection, Ahrefs domain
 rating lookup, a persistent Domain DB, and a Google Maps lead-scraping module —
 all behind a lightweight login screen.
 
+Runs locally with `python run.py` or on a server under gunicorn — see
+[Run](#run). Read [Known limitations](#known-limitations) before deploying.
+
+**Further reading:** [docs/maps-scraper.md](docs/maps-scraper.md) — how the Maps
+module is built, where its limits are, and what full autonomy would require.
+
 ## What it does
 
-The app has five tabs plus one modal, all served from a single Flask process.
+The app has four tabs plus one modal, all served from a single Flask process.
 Everything except the login/register endpoints requires an authenticated session
 (see [Authentication](#authentication) below).
 
@@ -61,23 +67,35 @@ it does not sync between machines and is not affected by who is logged in.
 
 ### DR Checker tab
 
-Bulk-looks up Ahrefs' free Domain Rating for a list of domains, one at a time:
+> **Currently blocked upstream.** Ahrefs has put the free `domain-rating-free`
+> endpoint behind bot protection: it answers `403 Forbidden` to a plain request
+> and serves a Cloudflare challenge to a browser-like one. Every domain comes
+> back as `—` with `"error": "http 403"`. The tab is left in place because the
+> only thing that changed is the upstream's willingness to answer — see
+> [Known limitations](#known-limitations).
 
-1. Paste domains (one per line) and click **Check DR**
-2. Each domain is queried sequentially against `/api/dr-check`, which proxies
-   Ahrefs' public `domain-rating-free` endpoint server-side
-3. A `429` (rate limited) response is retried once after a 5-second pause
+Bulk-looks up Ahrefs' free Domain Rating for a list of domains:
+
+1. Paste domains (one per line) and click **Check DR** — duplicates are dropped
+2. Domains go to `/api/dr-check` in chunks of 20; the server resolves each chunk
+   in parallel (`DR_WORKERS`, default 8) against Ahrefs' public
+   `domain-rating-free` endpoint, and results render chunk by chunk
+3. A `429` (rate limited) response is retried after a pause (`DR_RETRIES`,
+   `DR_RETRY_BACKOFF`); a domain that still fails shows `—` and does not affect
+   the rest of the batch
 4. Click the **DR** column header to sort ascending/descending/original order
 5. **Export CSV** downloads `domain;dr` as a semicolon-separated file with a UTF-8 BOM
+
+> If you start seeing "rate limited" results, lower `DR_WORKERS`.
 
 ### Maps Scraper tab
 
 Continuously scrapes Google Maps for businesses in a given niche/city and collects
 their **website domains** — useful for building outreach or prospecting lists.
 It drives [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper)
-running in Docker; **see [Docker Compose setup](#docker-compose-setup-maps-scraper)
-below before using this tab** — without the container running, starting a job
-returns a clear `503` error.
+running in Docker; **see [Docker Compose setup](#docker-compose-setup) below
+before using this tab** — without the container running, starting a job returns
+a clear `503` error.
 
 **Starting a job:**
 
@@ -133,13 +151,13 @@ whole running process).
 ### Authentication
 
 The whole app sits behind a session-based login (Flask session + `werkzeug.security`
-password hashing). Only `/api/auth/*`, the browser heartbeat endpoints
-(`/api/ping`, `/api/browser-disconnect`), and static assets are reachable without
-being logged in — every other page and API route redirects to the login form / 401s.
+password hashing). Only `/api/auth/*` and static assets are reachable without being
+logged in — every other page and API route redirects to the login form / 401s.
 
-- On first run, a default account is seeded and printed to the console:
-  `admin@checker.local` / `admin123` (override via `SEED_ADMIN_EMAIL` /
-  `SEED_ADMIN_PASSWORD`). **Change this password after your first login.**
+- On first run, a default account is seeded from `SEED_ADMIN_EMAIL` /
+  `SEED_ADMIN_PASSWORD` (defaults `admin@checker.local` / `admin123`). The email is
+  printed to the console, the password is not. **Set a real password before
+  exposing the app, and change it after your first login.**
 - New accounts can self-register from the login screen ("Create one").
 - Registering a second account does **not** give it access to the first account's
   Maps jobs/domains/proxies (isolated per `owner_id`) — but it *does* share the same
@@ -147,23 +165,25 @@ being logged in — every other page and API route redirects to the login form /
 
 ## Screenshots
 
-![Main checker](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-16%20105035.png)
-![Web Archive](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20164632.png)
-![Domain DB](%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202026-06-15%20165042.png)
-
-These predate the DR Checker/Maps Scraper/login tabs added since. Run the app,
-capture new screenshots for those (and to refresh the ones above), and place
-them in `docs/screenshots/`.
+| | |
+|---|---|
+| ![Sign in](docs/screenshots/login.png) | ![Domain Checker](docs/screenshots/main-checker.png) |
+| **Sign in** | **Domain Checker** |
+| ![Web Archive](docs/screenshots/web-archive.png) | ![Domain DB](docs/screenshots/domain-db.png) |
+| **Web Archive** | **Domain DB** |
+| ![DR Checker](docs/screenshots/dr-checker.png) | ![Maps Scraper](docs/screenshots/maps.png) |
+| **DR Checker** | **Maps Scraper** |
 
 ## Tech stack
 
 | Layer                | Technology                                          |
 | --------------------- | --------------------------------------------------- |
-| Backend               | Python 3.10+, Flask 2.3.3                            |
+| Backend               | Python 3.10+, Flask 3.1.3                            |
+| WSGI server           | gunicorn (single worker — see [Run](#run))          |
 | Auth                  | Flask session, werkzeug.security (password hashing) |
 | Storage               | SQLite (Maps + users), browser `localStorage` (Domain DB) |
-| DNS resolution        | dnspython 2.4.2                                      |
-| HTTP / RDAP / WHOIS   | requests 2.31.0, socket                              |
+| DNS resolution        | dnspython 2.8.0                                      |
+| HTTP / RDAP / WHOIS   | requests 2.34.2, socket                              |
 | Concurrency           | threading, ThreadPoolExecutor                        |
 | Archive               | Wayback Machine CDX API, optional Groq LLM classifier |
 | Maps scraping         | [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) (Docker), Nominatim, `countryinfo` |
@@ -181,8 +201,14 @@ them in `docs/screenshots/`.
 
 ```bash
 cd backend
-pip install -r requirements.txt
-cp .env.example .env   # then edit .env as needed
+pip install -r requirements.txt   # or requirements-dev.txt to also get pytest
+cp .env.example .env
+```
+
+Then set `SECRET_KEY` in `backend/.env` — the app will not start without it:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 **Windows shortcut:** double-click `backend/run.bat` — it installs dependencies
@@ -190,51 +216,91 @@ and starts the server in one step.
 
 ## Run
 
+Local development — Flask's dev server:
+
 ```bash
 cd backend
 python run.py
 ```
 
-The app opens automatically at `http://127.0.0.1:8080`, shows the login screen
-first (seeded admin account printed to the console on first run — see
-[Authentication](#authentication)), and exits automatically when the browser tab
-is closed.
+Server — gunicorn via the WSGI entry point:
 
-## Docker Compose setup (Maps Scraper)
-
-The Maps tab talks to a separate container running
-[gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) in web/API
-mode. `docker-compose.yml` in the project root defines it:
-
-```yaml
-services:
-  gmaps-scraper:
-    image: gosom/google-maps-scraper
-    command: ["-data-folder", "/gmapsdata", "-cache", "/gmapscache"]
-    ports:
-      - "8090:8080"
-    volumes:
-      - gmaps-cache:/gmapscache
-      - gmaps-data:/gmapsdata
-    restart: unless-stopped
+```bash
+gunicorn -w 1 --threads 8 --timeout 600 -b 0.0.0.0:8080 wsgi:app
 ```
+
+Or the whole stack (app + scraper) in Docker:
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://127.0.0.1:8080` and log in (see [Authentication](#authentication)).
+
+> **Run a single worker.** Scan progress lives in `app.checker_state` and the
+> Maps job pollers are daemon threads — both are per-process. With `-w 2` a
+> request to `/api/status` may land on a worker that knows nothing about the scan
+> another worker is running, so progress appears to jump or reset. Scale with
+> `--threads`, not `-w`, until that state moves out of process memory.
+
+## Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m playwright install chromium   # once, for the browser tests
+python -m pytest -q
+```
+
+50 tests, no outbound network calls — everything external is mocked and the
+database is a temporary SQLite file.
+
+| | |
+|---|---|
+| `tests/test_app.py` | 41 API tests: scan pipeline, auth, DR endpoint, Maps API |
+| `tests/test_e2e.py` | 9 browser tests driving the real UI with Playwright |
+
+The browser tests cover what a static check cannot: that `data-action` buttons
+reach their module, that delegated handlers survive a re-render, and that the
+checker tab still calls into the Domain DB module after a scan. They run the app
+in-process, so they can patch `dns_check` and `requests.get`.
+
+Skip them when you have no browser installed:
+
+```bash
+python -m pytest -q -m "not e2e"
+```
+
+## Docker Compose setup
+
+`docker-compose.yml` in the project root defines two services:
+
+| Service | What |
+|---|---|
+| `checker` | This app, built from `backend/Dockerfile`, gunicorn on `:8080` |
+| `gmaps-scraper` | [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) in web/API mode, published on `:8090` |
+
+`checker` reads the same `backend/.env` as a local run (`env_file`), overriding only
+what differs inside the network — notably `GMAPS_API_URL=http://gmaps-scraper:8080`,
+the scraper's *internal* port rather than the published 8090. The SQLite file lives
+in the `checker-data` volume, so it survives rebuilds.
 
 **Start it** (from the project root, where `docker-compose.yml` lives):
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-The first run pulls the image (Playwright + Chromium inside, so it's a few hundred
-MB — be patient). **Verify it's up:**
+The first run pulls the scraper image (Playwright + Chromium inside, so it's a few
+hundred MB — be patient). **Verify both are up:**
 
 ```bash
 docker compose ps
 ```
 
-You should see `gmaps-scraper` with state `Up`. The Flask app talks to it at
-`http://localhost:8090` by default (`GMAPS_API_URL` in `.env` — only change this if
-you remapped the port or run the scraper on another host).
+Running the app locally instead (`python run.py`) while only the scraper is in
+Docker also works — then `GMAPS_API_URL` stays `http://localhost:8090`, which is
+the default.
 
 **If the container isn't running**, clicking **Start scraping** in the Maps tab
 returns a `503` with a message like *"Google Maps scraper is unreachable at
@@ -298,27 +364,66 @@ backend/
 │   │   └── niches.json         # 20 predefined Maps niches
 │   ├── utils/
 │   │   ├── validators.py       # normalize_domain, to_ascii, is_valid_domain
-│   │   └── helpers.py          # dedupe, parse_tlds, filter_domains_by_tlds
+│   │   ├── helpers.py          # dedupe, parse_tlds, split_list, now_iso, escape_like
+│   │   ├── proxy.py            # Proxy URL parsing/masking, shared by Archive and Maps
+│   │   └── settings.py         # apply_config — injects settings into worker-thread modules
 │   ├── models.py               # Thread-safe Domain Checker scan state
 │   ├── check_pipeline.py       # Two-stage DNS + RDAP checking pipeline
-│   ├── browser_monitor.py      # Browser heartbeat monitor, auto-shutdown
 │   ├── db.py                   # SQLite connection helper + schema/migrations (Maps + users)
 │   ├── auth.py                 # Session auth, login_required gate, seed admin account
+│   ├── logging_setup.py        # Root logger configuration (LOG_LEVEL)
 │   ├── routes.py               # Domain Checker / Archive / DR Checker endpoints
 │   └── maps_routes.py          # /api/maps/* endpoints
 ├── static/
 │   ├── css/style.css           # All styles (CSS custom properties + component system)
-│   └── js/app.js               # Frontend logic — Domain Checker, DB, DR, Maps, auth
+│   └── js/                     # ES modules — see "Frontend" below
 ├── templates/
 │   ├── index.html              # Single-page app shell (all tabs)
 │   └── login.html              # Login / register screen
+├── tests/
+│   ├── test_app.py             # API tests
+│   └── test_e2e.py             # Browser tests (Playwright, marked `e2e`)
 ├── config.py                   # All settings via environment variables
-├── run.py                      # Entry point
+├── wsgi.py                     # WSGI entry point (gunicorn) — production
+├── run.py                      # Flask dev server — local development
 ├── run.bat                     # Windows one-click launcher
-└── requirements.txt
+├── Dockerfile                  # Application image
+├── pytest.ini
+├── requirements.txt
+└── requirements-dev.txt        # requirements.txt + pytest + pytest-playwright
 
-docker-compose.yml              # gosom/google-maps-scraper container (project root)
+docker-compose.yml              # App + gosom/google-maps-scraper (project root)
+docs/
+├── maps-scraper.md             # Maps module: architecture, limits, path to autonomy
+└── screenshots/
 ```
+
+### Frontend
+
+`static/js` is plain ES modules — no build step, no framework. `index.html` loads
+`main.js` with `type="module"` and the browser resolves the rest.
+
+| Module | Owns |
+|---|---|
+| `main.js` | Tab navigation and **every** DOM binding |
+| `shared.js` | `escapeHtml`, `showToast` |
+| `checker.js` | Scan run, domain textarea, file import |
+| `archive.js` | Web Archive modal |
+| `domain-db.js` | `localStorage` TLD buckets |
+| `dr.js` | DR lookup |
+| `maps.js` | Maps job lifecycle, results, proxy pool |
+| `auth.js` | Sign out |
+
+Feature modules export behaviour and never attach listeners to markup they do not
+own, so all wiring lives in `main.js`. Buttons declare `data-action` (plus
+`data-arg` when the call takes a literal) and go through one delegated click
+handler, which keeps working for rows rendered after load.
+
+**When adding a button:** give it `data-action="yourFunction"`, export
+`yourFunction` from its module, and add it to the `ACTIONS` map in `main.js`.
+An unknown `data-action` logs a console warning rather than failing silently.
+
+Changes here are covered by the browser tests — see [Tests](#tests).
 
 ## API reference
 
@@ -463,12 +568,31 @@ Fetch and analyze Wayback Machine history for a domain.
 ### DR Checker
 
 #### `POST /api/dr-check`
-Proxies Ahrefs' free Domain Rating API for a single domain.
+Looks up Ahrefs' free Domain Rating for a batch of domains, resolved in parallel.
+Ahrefs currently rejects these calls — every result comes back with
+`"error": "http 403"`, see [Known limitations](#known-limitations).
 
-**Request body:** `{"domain": "example.com"}`
+**Request body:** `{"domains": ["example.com", "example.net"]}`
+Also accepts the single form `{"domain": "example.com"}`. Input is normalized
+(scheme/path stripped) and deduplicated.
 
-**Response:** passthrough of Ahrefs' JSON response (`domain_rating.domain_rating`
-holds the score), same status code Ahrefs returned. `502` on timeout/network error.
+**Response (200):**
+
+```json
+{
+  "results": [
+    {"domain": "example.com", "dr": 42, "error": ""},
+    {"domain": "example.net", "dr": null, "error": "rate limited"}
+  ]
+}
+```
+
+`dr` is the rounded rating, or `null` when the lookup failed — `error` then says
+why (`timeout`, `rate limited`, `http 503`, `no rating`, …). One failing domain
+does not fail the batch.
+
+**Errors:** `400` empty input, `domains` not a list, or more than `DR_MAX_BATCH`
+domains in one request.
 
 ---
 
@@ -576,44 +700,26 @@ Deletes every proxy currently marked `failed`.
 
 ---
 
-### Browser lifecycle
-
-#### `GET /api/ping` · `POST /api/ping`
-Browser heartbeat. Called by the frontend to keep the process alive. Public — does
-**not** require authentication (see [Authentication](#authentication)).
-Accepts optional `session` query parameter or `X-Browser-Session` header.
-
-#### `POST /api/browser-disconnect`
-Signal that the browser tab was closed. Triggers the shutdown timer. Also public.
-
 ## Configuration
 
-Copy `.env.example` to `backend/.env` and adjust as needed.
-All variables are optional — the defaults work out of the box.
+Copy `.env.example` to `backend/.env` and adjust as needed. Everything is optional
+**except `SECRET_KEY`** — the app refuses to start without it.
 
 ### Server / Auth
 
 | Variable | Default | Description |
 |---|---|---|
-| `HOST` | `127.0.0.1` | Bind address |
+| `SECRET_KEY` | — | **Required.** Signs the auth session cookie. Generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8080` | HTTP port |
 | `DEBUG` | `False` | Enable Flask debug mode |
-| `SECRET_KEY` | _(random)_ | Flask secret key — also signs the auth session cookie |
+| `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` — logs go to stdout |
+| `SESSION_COOKIE_SECURE` | `0` | Set to `1` when serving over HTTPS |
 | `CORS_ORIGINS` | _(empty)_ | Comma-separated allowed CORS origins; empty = disabled |
 | `MAX_DOMAINS` | `200000` | Max domains accepted per scan request |
-| `AUTO_OPEN_BROWSER` | `1` | Open browser automatically on startup |
 | `SEED_ADMIN_EMAIL` | `admin@checker.local` | Account created on first run if no users exist |
-| `SEED_ADMIN_PASSWORD` | `admin123` | Password for the seeded account — change it after first login |
+| `SEED_ADMIN_PASSWORD` | `admin123` | Password for the seeded account — set a real one before exposing the app |
 | `MAPS_DB_PATH` | _(empty → `backend/data/maps.db`)_ | SQLite file for Maps tables + `users` |
-
-### Browser monitor
-
-| Variable | Default | Description |
-|---|---|---|
-| `BROWSER_MONITOR_ENABLED` | `1` | Exit process when browser tab closes |
-| `BROWSER_MONITOR_TIMEOUT` | `60` | Seconds without a ping before exit |
-| `BROWSER_MONITOR_STARTUP_GRACE` | `30` | Seconds after startup before monitoring begins |
-| `BROWSER_MONITOR_SHUTDOWN_DELAY` | `3` | Seconds to wait before process exit |
 
 ### Scan / RDAP
 
@@ -621,6 +727,9 @@ All variables are optional — the defaults work out of the box.
 |---|---|---|
 | `DEFAULT_TLDS` | `es it pl fr de pt nl be se fi no dk tr in ca br mx co` | TLDs appended to bare labels |
 | `DNS_PREFILTER_STRICT_TLDS` | `com in co mx vn` | TLDs where DNS result is trusted without RDAP |
+| `DNS_RESOLVERS` | `1.1.1.1 8.8.8.8` | Nameservers used by the DNS prefilter |
+| `DNS_TIMEOUT` | `1.6` | Per-query DNS timeout (seconds) |
+| `DNS_RETRIES` | `2` | DNS retry count on timeout |
 | `FINAL_CHECK_ENABLED` | `1` | Enable RDAP second-pass check |
 | `FINAL_CHECK_WORKERS` | `20` | RDAP parallel workers |
 | `RDAP_BOOTSTRAP_URL` | `https://data.iana.org/rdap/dns.json` | IANA RDAP endpoint registry |
@@ -644,10 +753,22 @@ All variables are optional — the defaults work out of the box.
 | `WHOIS_BOOTSTRAP_ENABLED` | `1` | Use IANA WHOIS bootstrap |
 | `WHOIS_BOOTSTRAP_SERVER` | `whois.iana.org` | IANA bootstrap WHOIS server |
 
+### DR Checker
+
+| Variable | Default | Description |
+|---|---|---|
+| `DR_API_URL` | `https://api.ahrefs.com/v3/public/domain-rating-free` | Ahrefs public Domain Rating endpoint |
+| `DR_TIMEOUT` | `10` | Per-request timeout (seconds) |
+| `DR_WORKERS` | `8` | Domains looked up in parallel per request — lower this if Ahrefs starts returning "rate limited" |
+| `DR_MAX_BATCH` | `100` | Max domains accepted in one request |
+| `DR_RETRIES` | `1` | Retries after a `429` |
+| `DR_RETRY_BACKOFF` | `5.0` | Pause before a retry (seconds, multiplied by attempt) |
+
 ### Archive / Wayback
 
 | Variable | Default | Description |
 |---|---|---|
+| `ARCHIVE_USER_AGENT` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36` | User-Agent sent to Wayback |
 | `ARCHIVE_YEAR_FROM` | `1998` | Earliest snapshot year to fetch |
 | `ARCHIVE_YEAR_TO` | `2026` | Latest snapshot year to fetch |
 | `ARCHIVE_TIMEOUT` | `45` | CDX request timeout (seconds) |
@@ -749,6 +870,37 @@ All variables are optional — the defaults work out of the box.
 | `PROXY_CHECK_URL` | `https://www.google.com` | URL used to test each proxy |
 | `PROXY_CHECK_TIMEOUT` | `10` | Per-proxy timeout (seconds) |
 | `PROXY_CHECK_WORKERS` | `8` | Parallel workers for "Check All" |
+
+## Known limitations
+
+**DR Checker is blocked upstream.** Ahrefs put the free `domain-rating-free`
+endpoint behind bot protection — `403` to a plain request, a Cloudflare
+challenge to a browser-like one. Working around that would mean defeating their
+bot protection, so the options are the official (paid) Ahrefs API with a key, or
+dropping the tab. Everything on our side of the call still works: the batch
+resolves in parallel and reports the real reason per domain.
+
+**One WSGI worker only.** Scan progress lives in `app.checker_state` and the
+Maps pollers are daemon threads — both are per-process. With two workers a
+`/api/status` request can land on a worker that knows nothing about the scan the
+other one is running. Scale with `--threads`, not `-w`. Lifting this means
+moving that state into SQLite or Redis.
+
+**Domain DB is per-browser, not per-account.** It lives in `localStorage`, so it
+does not sync between machines and is unaffected by who is signed in. Maps data
+*is* account-scoped (`owner_id`); Domain Checker and DR Checker results are not
+persisted at all.
+
+**Only one Maps job runs at a time per account**, and a job's poll thread does
+not survive a restart — `reset_stale_jobs()` marks orphaned `running` jobs as
+`stopped` on boot, and the job has to be started again.
+
+**The seeded admin password defaults to `admin123`.** It is created on first run
+if no users exist. Set `SEED_ADMIN_PASSWORD` before exposing the app.
+
+**No rate limiting on the auth endpoints.** `/api/auth/login` will accept
+unlimited attempts; put the app behind a reverse proxy that throttles if it is
+reachable from the internet.
 
 ## License
 

@@ -1,11 +1,35 @@
 """Helper utility functions"""
 
-from typing import List, Sequence
+from datetime import datetime, timezone
+from typing import List
+
+
+def now_iso() -> str:
+    """UTC timestamp in the format every table in the SQLite schema stores."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def escape_like(value: str) -> str:
+    """Escape LIKE wildcards so a search term matches literally.
+
+    Pair with ``ESCAPE '\\'`` in the query.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def dedupe(lst: List[str]) -> List[str]:
     """Remove duplicates while preserving order"""
     return list(dict.fromkeys(lst))
+
+
+def split_list(raw: str) -> List[str]:
+    """Split a comma/semicolon/space separated env value, preserving case."""
+    parts: List[str] = []
+    for token in (raw or "").replace(",", " ").replace(";", " ").split():
+        item = token.strip()
+        if item:
+            parts.append(item)
+    return dedupe(parts)
 
 
 def parse_tlds(raw: str) -> List[str]:
@@ -19,31 +43,3 @@ def parse_tlds(raw: str) -> List[str]:
         if t:
             parts.append(t)
     return dedupe(parts)
-
-
-def filter_domains_by_tlds(domains: Sequence[str], excluded_tlds: Sequence[str]) -> List[str]:
-    """Filter out domains that end with any excluded TLD/suffix."""
-    if not excluded_tlds:
-        return list(domains)
-
-    normalized = []
-    for tld in excluded_tlds:
-        t = (tld or "").strip().lower().lstrip(".")
-        if t:
-            normalized.append(t)
-
-    normalized = dedupe(normalized)
-    if not normalized:
-        return list(domains)
-
-    suffixes = tuple(f".{t}" for t in normalized)
-    excluded_set = set(normalized)
-    out: List[str] = []
-    for domain in domains:
-        d = (domain or "").strip().lower()
-        if not d:
-            continue
-        if d in excluded_set or d.endswith(suffixes):
-            continue
-        out.append(domain)
-    return out

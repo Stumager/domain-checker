@@ -5,12 +5,14 @@ Orchestrates the two-stage domain-availability check:
   2. RDAP final check (parallel, on available/error candidates)
 """
 
-import traceback
+import logging
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 from .models import CheckerState
 from .services import dns_check, rdap_check
 from .utils import dedupe
+
+logger = logging.getLogger(__name__)
 
 
 def _get_domain_tld(domain: str) -> str:
@@ -47,11 +49,13 @@ def _run_thread_pool(items, worker, max_workers: int, max_in_flight: int = None,
         while futures:
             done, _ = wait(futures, return_when=FIRST_COMPLETED)
             for fut in done:
-                futures.pop(fut, None)
+                item = futures.pop(fut, None)
                 try:
                     fut.result()
                 except Exception:
-                    pass
+                    # Workers handle their own errors; anything reaching here is
+                    # unexpected, so record it rather than dropping it silently.
+                    logger.exception("Worker failed for %r", item)
             while len(futures) < max_in_flight and _submit_next():
                 pass
 
@@ -208,7 +212,6 @@ def run_check(
             state.finish(stage="done", message="Done!")
 
     except Exception as e:
-        print(f"ERROR in run_check: {e}")
-        traceback.print_exc()
+        logger.exception("Scan pipeline failed")
         _dedupe_results(state)
         state.fail(f"Error: {str(e)}")

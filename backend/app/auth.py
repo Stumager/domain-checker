@@ -1,28 +1,24 @@
 """Аутентификация: сессии Flask + хеши паролей werkzeug."""
 
+import logging
 import re
-from datetime import datetime, timezone
 from functools import wraps
 
-from flask import Blueprint, current_app, jsonify, render_template, request, session
+from flask import Blueprint, jsonify, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
+from .utils import now_iso
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
-# Эндпоинты, которые обязаны работать без входа:
-# static — отдача css/js для самой формы логина,
-# browser_ping/browser_disconnect — heartbeat, без которого BrowserMonitor
-# через startup_grace секунд убьёт процесс прямо на странице входа.
-PUBLIC_ENDPOINTS = {"static", "browser_ping", "browser_disconnect"}
+# static — отдача css/js для самой формы логина
+PUBLIC_ENDPOINTS = {"static"}
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD_LENGTH = 6
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def current_user():
@@ -74,13 +70,14 @@ def seed_admin(app):
 
     db.execute(
         "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-        (email, generate_password_hash(password), _now_iso()),
+        (email, generate_password_hash(password), now_iso()),
     )
 
-    print("=" * 62)
-    print(f"  WARNING: default account created -> {email} / {password}")
-    print("  Change this password after the first login.")
-    print("=" * 62)
+    # The password is deliberately not logged.
+    logger.warning(
+        "Seeded the default account %s from SEED_ADMIN_PASSWORD. Change this "
+        "password after the first login.", email,
+    )
 
 
 def register_auth(app):
@@ -116,7 +113,7 @@ def register():
 
     user_id = db.execute(
         "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-        (email, generate_password_hash(password), _now_iso()),
+        (email, generate_password_hash(password), now_iso()),
     )
     session["user_id"] = user_id
 

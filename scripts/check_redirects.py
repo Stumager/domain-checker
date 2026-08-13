@@ -1,7 +1,6 @@
 """Utility script for checking 301 redirects and status codes"""
 
 import requests
-from urllib.parse import urlparse
 
 
 def check_redirect(url):

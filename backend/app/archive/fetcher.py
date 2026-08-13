@@ -9,10 +9,11 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from urllib.parse import urlsplit
 
 import requests
 from flask import current_app
+
+from ..utils import DIRECT_LABEL, mask_proxy_url, proxy_kwargs
 
 
 ARCHIVE_CDX_HTTPS_URL = "https://web.archive.org/cdx/search/cdx"
@@ -45,48 +46,6 @@ def _perform_request(url: str, **kwargs):
     return requests.get(url, **kwargs)
 
 
-# ---------------------------------------------------------------------------
-# Proxy helpers
-# ---------------------------------------------------------------------------
-
-def _normalize_proxy_url(value: str) -> str:
-    """Normalize a proxy entry to a requests-compatible URL."""
-    token = (value or "").strip()
-    if not token:
-        return ""
-    if "://" in token:
-        return token
-    parts = token.split(":")
-    if len(parts) == 2:
-        host, port = parts
-        return f"http://{host}:{port}"
-    if len(parts) == 4:
-        host, port, username, password = parts
-        return f"http://{username}:{password}@{host}:{port}"
-    return f"http://{token}"
-
-
-def _mask_proxy_url(proxy_url: str) -> str:
-    """Return proxy URL with credentials stripped for display in the UI."""
-    if not proxy_url:
-        return "Direct connection"
-    try:
-        parsed = urlsplit(proxy_url)
-        host = parsed.hostname or ""
-        port = f":{parsed.port}" if parsed.port else ""
-        scheme = parsed.scheme or "http"
-        return f"{scheme}://{host}{port}"
-    except Exception:
-        if "@" in proxy_url:
-            return proxy_url.split("@", 1)[-1]
-        return proxy_url
-
-
-def _proxy_kwargs(proxy_url: str) -> dict:
-    """Build requests kwargs for a specific proxy URL."""
-    return {"proxies": {"http": proxy_url, "https": proxy_url}}
-
-
 def _build_archive_request_candidates(proxy_url: str) -> list:
     """Build request candidates: manual proxy first, then optional direct fallback."""
     allow_direct_fallback = bool(current_app.config.get("ARCHIVE_DIRECT_FALLBACK", True))
@@ -95,8 +54,8 @@ def _build_archive_request_candidates(proxy_url: str) -> list:
     if proxy_url:
         candidates.append({
             "mode": "proxy",
-            "label": _mask_proxy_url(proxy_url),
-            "req_kwargs": _proxy_kwargs(proxy_url),
+            "label": mask_proxy_url(proxy_url),
+            "req_kwargs": proxy_kwargs(proxy_url),
         })
 
     if allow_direct_fallback or not proxy_url:
@@ -106,7 +65,7 @@ def _build_archive_request_candidates(proxy_url: str) -> list:
             direct_kwargs = {}
         candidates.append({
             "mode": "direct",
-            "label": "Direct connection",
+            "label": DIRECT_LABEL,
             "req_kwargs": direct_kwargs,
         })
 

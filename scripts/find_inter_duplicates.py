@@ -1,7 +1,6 @@
 """Utility script for batch inter-domain duplicate detection"""
 
 import sys
-from pathlib import Path
 from collections import defaultdict
 
 

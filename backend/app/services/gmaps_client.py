@@ -15,6 +15,7 @@ import re
 
 import requests
 
+from ..utils import apply_config
 from . import geo_data
 from .proxy_service import working_proxies
 
@@ -35,9 +36,8 @@ class GmapsError(RuntimeError):
 
 
 def set_config(config: dict):
-    for key, value in (config or {}).items():
-        if value not in (None, ""):
-            _CONFIG[key] = value
+    # Shares one dict with maps_service, so unknown keys here are its keys.
+    apply_config(_CONFIG, config, source="gmaps_client", warn_unknown=False)
 
 
 def _api_url(path: str) -> str:
@@ -62,13 +62,6 @@ def pick(payload: dict, *names):
         if name.lower() in lowered:
             return lowered[name.lower()]
     return None
-
-
-def health() -> bool:
-    try:
-        return _request("GET", "/api/v1/jobs").status_code < 500
-    except GmapsUnavailable:
-        return False
 
 
 def create_gmaps_job(payload: dict) -> str:
@@ -115,7 +108,7 @@ def download_gmaps_csv(gmaps_job_id: str) -> str:
     # The scraper emits UTF-8 CSV, so use the declared charset when present and
     # otherwise decode as UTF-8 to preserve non-ASCII business names/addresses.
     content_type = response.headers.get("Content-Type", "")
-    charset = re.search(r"charset\s*=\s*([\\w.-]+)", content_type, re.IGNORECASE)
+    charset = re.search(r"charset\s*=\s*([\w.-]+)", content_type, re.IGNORECASE)
     response.encoding = charset.group(1) if charset else "utf-8"
     return response.text
 
