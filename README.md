@@ -1,13 +1,19 @@
 # Domain Checker
 
-A local desktop tool for bulk domain availability checking with DNS prefiltering,
+A self-hosted tool for bulk domain availability checking with DNS prefiltering,
 RDAP verification, Wayback Machine history analysis, spam detection, Ahrefs domain
 rating lookup, a persistent Domain DB, and a Google Maps lead-scraping module —
 all behind a lightweight login screen.
 
+Runs locally with `python run.py` or on a server under gunicorn — see
+[Run](#run). Read [Known limitations](#known-limitations) before deploying.
+
+**Further reading:** [docs/maps-scraper.md](docs/maps-scraper.md) — how the Maps
+module is built, where its limits are, and what full autonomy would require.
+
 ## What it does
 
-The app has five tabs plus one modal, all served from a single Flask process.
+The app has four tabs plus one modal, all served from a single Flask process.
 Everything except the login/register endpoints requires an authenticated session
 (see [Authentication](#authentication) below).
 
@@ -61,6 +67,13 @@ it does not sync between machines and is not affected by who is logged in.
 
 ### DR Checker tab
 
+> **Currently blocked upstream.** Ahrefs has put the free `domain-rating-free`
+> endpoint behind bot protection: it answers `403 Forbidden` to a plain request
+> and serves a Cloudflare challenge to a browser-like one. Every domain comes
+> back as `—` with `"error": "http 403"`. The tab is left in place because the
+> only thing that changed is the upstream's willingness to answer — see
+> [Known limitations](#known-limitations).
+
 Bulk-looks up Ahrefs' free Domain Rating for a list of domains:
 
 1. Paste domains (one per line) and click **Check DR** — duplicates are dropped
@@ -80,9 +93,9 @@ Bulk-looks up Ahrefs' free Domain Rating for a list of domains:
 Continuously scrapes Google Maps for businesses in a given niche/city and collects
 their **website domains** — useful for building outreach or prospecting lists.
 It drives [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper)
-running in Docker; **see [Docker Compose setup](#docker-compose-setup-maps-scraper)
-below before using this tab** — without the container running, starting a job
-returns a clear `503` error.
+running in Docker; **see [Docker Compose setup](#docker-compose-setup) below
+before using this tab** — without the container running, starting a job returns
+a clear `503` error.
 
 **Starting a job:**
 
@@ -152,13 +165,14 @@ logged in — every other page and API route redirects to the login form / 401s.
 
 ## Screenshots
 
-![Main checker](docs/screenshots/main-checker.png)
-![Web Archive](docs/screenshots/web-archive.png)
-![Domain DB](docs/screenshots/domain-db.png)
-
-These predate the DR Checker/Maps Scraper/login tabs added since. Run the app,
-capture new screenshots for those (and to refresh the ones above), and place
-them in `docs/screenshots/`.
+| | |
+|---|---|
+| ![Sign in](docs/screenshots/login.png) | ![Domain Checker](docs/screenshots/main-checker.png) |
+| **Sign in** | **Domain Checker** |
+| ![Web Archive](docs/screenshots/web-archive.png) | ![Domain DB](docs/screenshots/domain-db.png) |
+| **Web Archive** | **Domain DB** |
+| ![DR Checker](docs/screenshots/dr-checker.png) | ![Maps Scraper](docs/screenshots/maps.png) |
+| **DR Checker** | **Maps Scraper** |
 
 ## Tech stack
 
@@ -228,6 +242,19 @@ Open `http://127.0.0.1:8080` and log in (see [Authentication](#authentication)).
 > request to `/api/status` may land on a worker that knows nothing about the scan
 > another worker is running, so progress appears to jump or reset. Scale with
 > `--threads`, not `-w`, until that state moves out of process memory.
+
+## Tests
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
+
+The suite covers the scan pipeline, auth, the DR endpoint and the Maps API
+against a temporary SQLite file — it makes no outbound network calls.
+
+The frontend has no automated tests; changes to `static/js` need a click-through.
 
 ## Docker Compose setup
 
@@ -322,16 +349,19 @@ backend/
 │   │   └── niches.json         # 20 predefined Maps niches
 │   ├── utils/
 │   │   ├── validators.py       # normalize_domain, to_ascii, is_valid_domain
-│   │   └── helpers.py          # dedupe, parse_tlds
+│   │   ├── helpers.py          # dedupe, parse_tlds, split_list, now_iso, escape_like
+│   │   ├── proxy.py            # Proxy URL parsing/masking, shared by Archive and Maps
+│   │   └── settings.py         # apply_config — injects settings into worker-thread modules
 │   ├── models.py               # Thread-safe Domain Checker scan state
 │   ├── check_pipeline.py       # Two-stage DNS + RDAP checking pipeline
 │   ├── db.py                   # SQLite connection helper + schema/migrations (Maps + users)
 │   ├── auth.py                 # Session auth, login_required gate, seed admin account
+│   ├── logging_setup.py        # Root logger configuration (LOG_LEVEL)
 │   ├── routes.py               # Domain Checker / Archive / DR Checker endpoints
 │   └── maps_routes.py          # /api/maps/* endpoints
 ├── static/
 │   ├── css/style.css           # All styles (CSS custom properties + component system)
-│   └── js/app.js               # Frontend logic — Domain Checker, DB, DR, Maps, auth
+│   └── js/                     # ES modules — see "Frontend" below
 ├── templates/
 │   ├── index.html              # Single-page app shell (all tabs)
 │   └── login.html              # Login / register screen
@@ -344,7 +374,35 @@ backend/
 └── requirements-dev.txt        # requirements.txt + pytest
 
 docker-compose.yml              # App + gosom/google-maps-scraper (project root)
+docs/
+├── maps-scraper.md             # Maps module: architecture, limits, path to autonomy
+└── screenshots/
 ```
+
+### Frontend
+
+`static/js` is plain ES modules — no build step, no framework. `index.html` loads
+`main.js` with `type="module"` and the browser resolves the rest.
+
+| Module | Owns |
+|---|---|
+| `main.js` | Tab navigation and **every** DOM binding |
+| `shared.js` | `escapeHtml`, `showToast` |
+| `checker.js` | Scan run, domain textarea, file import |
+| `archive.js` | Web Archive modal |
+| `domain-db.js` | `localStorage` TLD buckets |
+| `dr.js` | DR lookup |
+| `maps.js` | Maps job lifecycle, results, proxy pool |
+| `auth.js` | Sign out |
+
+Feature modules export behaviour and never attach listeners to markup they do not
+own, so all wiring lives in `main.js`. Buttons declare `data-action` (plus
+`data-arg` when the call takes a literal) and go through one delegated click
+handler, which keeps working for rows rendered after load.
+
+**When adding a button:** give it `data-action="yourFunction"`, export
+`yourFunction` from its module, and add it to the `ACTIONS` map in `main.js`.
+An unknown `data-action` logs a console warning rather than failing silently.
 
 ## API reference
 
@@ -490,6 +548,8 @@ Fetch and analyze Wayback Machine history for a domain.
 
 #### `POST /api/dr-check`
 Looks up Ahrefs' free Domain Rating for a batch of domains, resolved in parallel.
+Ahrefs currently rejects these calls — every result comes back with
+`"error": "http 403"`, see [Known limitations](#known-limitations).
 
 **Request body:** `{"domains": ["example.com", "example.net"]}`
 Also accepts the single form `{"domain": "example.com"}`. Input is normalized
@@ -789,6 +849,37 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 | `PROXY_CHECK_URL` | `https://www.google.com` | URL used to test each proxy |
 | `PROXY_CHECK_TIMEOUT` | `10` | Per-proxy timeout (seconds) |
 | `PROXY_CHECK_WORKERS` | `8` | Parallel workers for "Check All" |
+
+## Known limitations
+
+**DR Checker is blocked upstream.** Ahrefs put the free `domain-rating-free`
+endpoint behind bot protection — `403` to a plain request, a Cloudflare
+challenge to a browser-like one. Working around that would mean defeating their
+bot protection, so the options are the official (paid) Ahrefs API with a key, or
+dropping the tab. Everything on our side of the call still works: the batch
+resolves in parallel and reports the real reason per domain.
+
+**One WSGI worker only.** Scan progress lives in `app.checker_state` and the
+Maps pollers are daemon threads — both are per-process. With two workers a
+`/api/status` request can land on a worker that knows nothing about the scan the
+other one is running. Scale with `--threads`, not `-w`. Lifting this means
+moving that state into SQLite or Redis.
+
+**Domain DB is per-browser, not per-account.** It lives in `localStorage`, so it
+does not sync between machines and is unaffected by who is signed in. Maps data
+*is* account-scoped (`owner_id`); Domain Checker and DR Checker results are not
+persisted at all.
+
+**Only one Maps job runs at a time per account**, and a job's poll thread does
+not survive a restart — `reset_stale_jobs()` marks orphaned `running` jobs as
+`stopped` on boot, and the job has to be started again.
+
+**The seeded admin password defaults to `admin123`.** It is created on first run
+if no users exist. Set `SEED_ADMIN_PASSWORD` before exposing the app.
+
+**No rate limiting on the auth endpoints.** `/api/auth/login` will accept
+unlimited attempts; put the app behind a reverse proxy that throttles if it is
+reachable from the internet.
 
 ## License
 

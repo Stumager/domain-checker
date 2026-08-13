@@ -1,5 +1,3 @@
-"""Scripts directory README"""
-
 # Utility Scripts
 
 This directory contains standalone utility scripts for domain management and analysis.
