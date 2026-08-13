@@ -128,9 +128,11 @@ def _init_maps_module(app: Flask):
         "PROXY_CHECK_WORKERS": app.config.get("PROXY_CHECK_WORKERS"),
     })
 
-    # Справочник языков грузится ~6 секунд, поэтому греем его в фоне
+    # Раньше грелось в фоне: старый countryinfo тратил ~6 секунд, и до конца
+    # прогрева /api/maps/geo отдавал пустые языки. Новый разбирается за десятки
+    # миллисекунд, так что делаем это синхронно и без гонки.
     if not app.config.get("TESTING"):
-        geo_data.start_language_warmup()
+        geo_data.warm_language_cache()
 
     # Потоки поллинга не переживают рестарт — снимаем зависший статус running
     maps_service.reset_stale_jobs()

@@ -164,11 +164,12 @@ them in `docs/screenshots/`.
 
 | Layer                | Technology                                          |
 | --------------------- | --------------------------------------------------- |
-| Backend               | Python 3.10+, Flask 2.3.3                            |
+| Backend               | Python 3.10+, Flask 3.1.3                            |
+| WSGI server           | gunicorn (single worker — see [Run](#run))          |
 | Auth                  | Flask session, werkzeug.security (password hashing) |
 | Storage               | SQLite (Maps + users), browser `localStorage` (Domain DB) |
-| DNS resolution        | dnspython 2.4.2                                      |
-| HTTP / RDAP / WHOIS   | requests 2.31.0, socket                              |
+| DNS resolution        | dnspython 2.8.0                                      |
+| HTTP / RDAP / WHOIS   | requests 2.34.2, socket                              |
 | Concurrency           | threading, ThreadPoolExecutor                        |
 | Archive               | Wayback Machine CDX API, optional Groq LLM classifier |
 | Maps scraping         | [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) (Docker), Nominatim, `countryinfo` |
@@ -186,7 +187,7 @@ them in `docs/screenshots/`.
 
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r requirements.txt   # or requirements-dev.txt to also get pytest
 cp .env.example .env
 ```
 
@@ -339,7 +340,8 @@ backend/
 ├── run.py                      # Flask dev server — local development
 ├── run.bat                     # Windows one-click launcher
 ├── Dockerfile                  # Application image
-└── requirements.txt
+├── requirements.txt
+└── requirements-dev.txt        # requirements.txt + pytest
 
 docker-compose.yml              # App + gosom/google-maps-scraper (project root)
 ```

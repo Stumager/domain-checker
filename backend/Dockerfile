@@ -8,7 +8,7 @@ WORKDIR /app
 # gunicorn is installed here rather than in requirements.txt: it cannot run on
 # Windows, and the team develops there with `python run.py`.
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0
+RUN pip install --no-cache-dir -r requirements.txt gunicorn==26.0.0
 
 COPY . ./
 

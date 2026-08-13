@@ -97,35 +97,41 @@ def _first_two_letter(languages) -> str:
 def warm_language_cache():
     """Разобрать весь справочник countryinfo разом.
 
-    CountryInfo().all() занимает ~6 секунд (тянет geoJSON), поэтому вызывается
-    один раз в фоновом потоке, а не на запросе.
+    Дёшево (десятки миллисекунд), поэтому вызывается синхронно на старте.
     """
     global _LANG_WARMED
 
     try:
-        from countryinfo import CountryInfo
+        from countryinfo import all_countries
 
-        data = CountryInfo().all() or {}
+        countries = all_countries() or []
     except Exception:
         # Not fatal: default_language() falls back to "en" per country, but the
         # Maps job then scrapes in the wrong language, so make it visible.
         logger.warning("countryinfo unavailable — country languages will fall back to 'en'", exc_info=True)
-        data = {}
+        countries = []
 
     by_name, by_iso = {}, {}
-    for key, info in data.items():
-        if not isinstance(info, dict):
+    for country in countries:
+        try:
+            info = country.info() or {}
+        except Exception:
             continue
 
         lang = _first_two_letter(info.get("languages"))
         if not lang:
             continue
 
-        by_name[str(key).casefold()] = lang
-
         name = (info.get("name") or "").strip()
         if name:
             by_name[name.casefold()] = lang
+
+        # geo.json (dr5hn) and countryinfo do not always spell a country the
+        # same way, so index the alternates too rather than falling back to "en".
+        for alternate in info.get("altSpellings") or []:
+            token = str(alternate or "").strip()
+            if len(token) > 2:
+                by_name.setdefault(token.casefold(), lang)
 
         iso2 = ((info.get("ISO") or {}).get("alpha2") or "").strip().upper()
         if iso2:
@@ -135,10 +141,6 @@ def warm_language_cache():
         _LANG_BY_NAME.update(by_name)
         _LANG_BY_ISO.update(by_iso)
         _LANG_WARMED = True
-
-
-def start_language_warmup():
-    threading.Thread(target=warm_language_cache, daemon=True).start()
 
 
 def default_language(country_name: str, country_code: str = "") -> str:
