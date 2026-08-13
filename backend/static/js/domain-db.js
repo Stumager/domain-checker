@@ -504,6 +504,3 @@ function dbConfirmAddNew(modal) {
     showToast(`Added ${added.toLocaleString()} to .${tld}` + (skipped ? ` • ${skipped.toLocaleString()} skipped` : ""));
 }
 
-/* ================================================
-   DR Checker
-   ================================================ */

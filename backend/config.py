@@ -69,17 +69,6 @@ class Config:
     DNS_TIMEOUT = float(os.getenv("DNS_TIMEOUT", "1.6"))
     DNS_RETRIES = int(os.getenv("DNS_RETRIES", "2"))
 
-    # DR Checker — Ahrefs public Domain Rating endpoint.
-    # Domains in one request are resolved in parallel; raising DR_WORKERS speeds
-    # the tab up but makes Ahrefs answer 429 sooner.
-    DR_API_URL = os.getenv(
-        "DR_API_URL", "https://api.ahrefs.com/v3/public/domain-rating-free"
-    ).strip()
-    DR_TIMEOUT = float(os.getenv("DR_TIMEOUT", "10"))
-    DR_WORKERS = int(os.getenv("DR_WORKERS", "8"))
-    DR_MAX_BATCH = int(os.getenv("DR_MAX_BATCH", "100"))
-    DR_RETRIES = int(os.getenv("DR_RETRIES", "1"))
-    DR_RETRY_BACKOFF = float(os.getenv("DR_RETRY_BACKOFF", "5.0"))
 
     # Wayback archive settings
     ARCHIVE_USER_AGENT = os.getenv(

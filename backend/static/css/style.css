@@ -1642,10 +1642,6 @@ button:focus-visible {
     }
 }
 
-/* DR Checker */
-.dr-attribution { margin-top: 12px; font-size: 11px; color: var(--text-muted, #6b7280); }
-.dr-attribution a { color: inherit; text-decoration: underline; }
-
 /* ==============================================
    Maps Scraper
    ============================================== */

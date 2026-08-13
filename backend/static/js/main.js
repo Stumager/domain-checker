@@ -47,7 +47,6 @@ import {
     renderDbSidebar,
     updateDbTabCount,
 } from "./domain-db.js";
-import { drExportCsv, drStartCheck, drStop, drToggleSort } from "./dr.js";
 import {
     mapsAddProxies,
     mapsCheckProxies,
@@ -88,9 +87,6 @@ const ACTIONS = {
     dbClearTld,
     dbImportFromPaste,
     dbLoadMoreDomains,
-    drStartCheck,
-    drStop,
-    drExportCsv,
     mapsOnNicheChange,
     mapsStartJob,
     mapsStopJob,
@@ -206,19 +202,6 @@ function bindDomainDbTab() {
     updateDbTabCount();
 }
 
-function bindDrTab() {
-    const input = document.getElementById("drInput");
-    if (input) {
-        input.addEventListener("input", () => {
-            const n = input.value.split("\n").filter(l => l.trim()).length;
-            document.getElementById("drCount").textContent = n;
-        });
-    }
-
-    const sortBtn = document.getElementById("drSortBtn");
-    if (sortBtn) sortBtn.addEventListener("click", drToggleSort);
-}
-
 function bindMapsTab() {
     // Delegated: pagination and the proxy table are rebuilt on every load.
     const pager = (containerId, attribute, handler) => {
@@ -252,6 +235,5 @@ window.addEventListener("DOMContentLoaded", () => {
     bindCheckerTab();
     bindArchiveModal();
     bindDomainDbTab();
-    bindDrTab();
     bindMapsTab();
 });

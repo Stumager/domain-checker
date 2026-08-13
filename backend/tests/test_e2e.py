@@ -31,7 +31,6 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app import create_app  # noqa: E402
 import app.check_pipeline as check_pipeline  # noqa: E402
-import app.routes as routes  # noqa: E402
 
 pytestmark = pytest.mark.e2e
 
@@ -108,7 +107,7 @@ def test_modules_load_without_console_errors(app_page):
     app_page.on("pageerror", lambda e: errors.append(str(e)))
     app_page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
 
-    for tab in ("domaindb", "drchecker", "maps", "checker"):
+    for tab in ("domaindb", "maps", "checker"):
         app_page.click(f".tab-btn[data-tab='{tab}']")
         app_page.wait_for_selector(f"#tab-{tab}.active")
 
@@ -191,30 +190,6 @@ def test_bucket_delete_needs_two_clicks_and_can_be_cancelled(app_page):
     app_page.click("#dbTldList [data-delete-tld='net']")
     app_page.click("#dbTldList [data-delete-tld='net']")
     app_page.wait_for_selector("#dbTldList .db-tld-item[data-tld='net']", state="detached")
-
-
-def test_dr_batch_renders_rows_and_sorts(app_page):
-    def fake_get(url, **kwargs):
-        rating = {"low.com": 5, "high.com": 90}[kwargs["params"]["target"]]
-        reply = mock.Mock()
-        reply.status_code = 200
-        reply.json.return_value = {"domain_rating": {"domain_rating": rating}}
-        return reply
-
-    app_page.click(".tab-btn[data-tab='drchecker']")
-    with mock.patch.object(routes.requests, "get", side_effect=fake_get):
-        app_page.fill("#drInput", "low.com\nhigh.com")
-        app_page.click("[data-action='drStartCheck']")
-        app_page.wait_for_function("document.getElementById('drTbody').rows.length === 2")
-
-    assert app_page.evaluate(
-        "[...document.getElementById('drTbody').rows].map(r => r.cells[1].textContent)"
-    ) == ["5", "90"]
-
-    app_page.click("#drSortBtn")  # descending
-    assert app_page.evaluate(
-        "[...document.getElementById('drTbody').rows].map(r => r.cells[1].textContent)"
-    ) == ["90", "5"]
 
 
 def test_maps_tab_loads_reference_data(app_page):

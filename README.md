@@ -1,9 +1,9 @@
 # Domain Checker
 
 A self-hosted tool for bulk domain availability checking with DNS prefiltering,
-RDAP verification, Wayback Machine history analysis, spam detection, Ahrefs domain
-rating lookup, a persistent Domain DB, and a Google Maps lead-scraping module —
-all behind a lightweight login screen.
+RDAP verification, Wayback Machine history analysis, spam detection, a persistent
+Domain DB, and a Google Maps lead-scraping module — all behind a lightweight
+login screen.
 
 Runs locally with `python run.py` or on a server under gunicorn — see
 [Run](#run). Read [Known limitations](#known-limitations) before deploying.
@@ -13,7 +13,7 @@ module is built, where its limits are, and what full autonomy would require.
 
 ## What it does
 
-The app has four tabs plus one modal, all served from a single Flask process.
+The app has three tabs plus one modal, all served from a single Flask process.
 Everything except the login/register endpoints requires an authenticated session
 (see [Authentication](#authentication) below).
 
@@ -65,29 +65,6 @@ server) for managing known domains:
 Because this data lives in the browser, it is **per-browser, not per-account** —
 it does not sync between machines and is not affected by who is logged in.
 
-### DR Checker tab
-
-> **Currently blocked upstream.** Ahrefs has put the free `domain-rating-free`
-> endpoint behind bot protection: it answers `403 Forbidden` to a plain request
-> and serves a Cloudflare challenge to a browser-like one. Every domain comes
-> back as `—` with `"error": "http 403"`. The tab is left in place because the
-> only thing that changed is the upstream's willingness to answer — see
-> [Known limitations](#known-limitations).
-
-Bulk-looks up Ahrefs' free Domain Rating for a list of domains:
-
-1. Paste domains (one per line) and click **Check DR** — duplicates are dropped
-2. Domains go to `/api/dr-check` in chunks of 20; the server resolves each chunk
-   in parallel (`DR_WORKERS`, default 8) against Ahrefs' public
-   `domain-rating-free` endpoint, and results render chunk by chunk
-3. A `429` (rate limited) response is retried after a pause (`DR_RETRIES`,
-   `DR_RETRY_BACKOFF`); a domain that still fails shows `—` and does not affect
-   the rest of the batch
-4. Click the **DR** column header to sort ascending/descending/original order
-5. **Export CSV** downloads `domain;dr` as a semicolon-separated file with a UTF-8 BOM
-
-> If you start seeing "rate limited" results, lower `DR_WORKERS`.
-
 ### Maps Scraper tab
 
 Continuously scrapes Google Maps for businesses in a given niche/city and collects
@@ -137,7 +114,7 @@ buttons that respect the current search/TLD filter.
 
 **Per-account isolation**: every job, discovered domain, and proxy is scoped to the
 logged-in account — two users of the same instance never see each other's Maps data
-(unlike the Domain Checker/DB/DR Checker tabs above, which are shared across the
+(unlike the Domain Checker and Domain DB tabs above, which are shared across the
 whole running process).
 
 > **Known limitation**: the gmaps-scraper web API (as of this writing) only accepts
@@ -161,7 +138,7 @@ logged in — every other page and API route redirects to the login form / 401s.
 - New accounts can self-register from the login screen ("Create one").
 - Registering a second account does **not** give it access to the first account's
   Maps jobs/domains/proxies (isolated per `owner_id`) — but it *does* share the same
-  Domain Checker/Domain DB/DR Checker state, since those aren't account-scoped.
+  Domain Checker/Domain DB state, since those aren't account-scoped.
 
 ## Screenshots
 
@@ -171,8 +148,8 @@ logged in — every other page and API route redirects to the login form / 401s.
 | **Sign in** | **Domain Checker** |
 | ![Web Archive](docs/screenshots/web-archive.png) | ![Domain DB](docs/screenshots/domain-db.png) |
 | **Web Archive** | **Domain DB** |
-| ![DR Checker](docs/screenshots/dr-checker.png) | ![Maps Scraper](docs/screenshots/maps.png) |
-| **DR Checker** | **Maps Scraper** |
+| ![Maps Scraper](docs/screenshots/maps.png) | |
+| **Maps Scraper** | |
 
 ## Tech stack
 
@@ -257,7 +234,7 @@ database is a temporary SQLite file.
 
 | | |
 |---|---|
-| `tests/test_app.py` | 41 API tests: scan pipeline, auth, DR endpoint, Maps API |
+| `tests/test_app.py` | 35 API tests: scan pipeline, auth, Maps API |
 | `tests/test_e2e.py` | 9 browser tests driving the real UI with Playwright |
 
 The browser tests cover what a static check cannot: that `data-action` buttons
@@ -334,9 +311,7 @@ A short "what do I click" summary per tab, for when you just want to get moving:
    domain (optionally a proxy) → **Search** → scroll the snapshot table.
 4. **Domain DB** — switch tabs → click **+** to create a TLD bucket → paste or
    drag-and-drop domains into it → search/export as needed.
-5. **DR Checker** — paste domains → **Check DR** → sort by clicking the column
-   header → **Export CSV** once done.
-6. **Maps Scraper** — make sure the Docker container is up (see above) → pick
+5. **Maps Scraper** — make sure the Docker container is up (see above) → pick
    niche/country/city → optionally open **Advanced Settings** / **Proxy Settings**
    → **Start scraping** → watch the status bar tick over on each cycle → browse or
    export the **Domains** results table → **Stop** when you have enough.
@@ -372,7 +347,7 @@ backend/
 │   ├── db.py                   # SQLite connection helper + schema/migrations (Maps + users)
 │   ├── auth.py                 # Session auth, login_required gate, seed admin account
 │   ├── logging_setup.py        # Root logger configuration (LOG_LEVEL)
-│   ├── routes.py               # Domain Checker / Archive / DR Checker endpoints
+│   ├── routes.py               # Domain Checker and Web Archive endpoints
 │   └── maps_routes.py          # /api/maps/* endpoints
 ├── static/
 │   ├── css/style.css           # All styles (CSS custom properties + component system)
@@ -410,7 +385,6 @@ docs/
 | `checker.js` | Scan run, domain textarea, file import |
 | `archive.js` | Web Archive modal |
 | `domain-db.js` | `localStorage` TLD buckets |
-| `dr.js` | DR lookup |
 | `maps.js` | Maps job lifecycle, results, proxy pool |
 | `auth.js` | Sign out |
 
@@ -564,35 +538,6 @@ Fetch and analyze Wayback Machine history for a domain.
 ```
 
 ---
-
-### DR Checker
-
-#### `POST /api/dr-check`
-Looks up Ahrefs' free Domain Rating for a batch of domains, resolved in parallel.
-Ahrefs currently rejects these calls — every result comes back with
-`"error": "http 403"`, see [Known limitations](#known-limitations).
-
-**Request body:** `{"domains": ["example.com", "example.net"]}`
-Also accepts the single form `{"domain": "example.com"}`. Input is normalized
-(scheme/path stripped) and deduplicated.
-
-**Response (200):**
-
-```json
-{
-  "results": [
-    {"domain": "example.com", "dr": 42, "error": ""},
-    {"domain": "example.net", "dr": null, "error": "rate limited"}
-  ]
-}
-```
-
-`dr` is the rounded rating, or `null` when the lookup failed — `error` then says
-why (`timeout`, `rate limited`, `http 503`, `no rating`, …). One failing domain
-does not fail the batch.
-
-**Errors:** `400` empty input, `domains` not a list, or more than `DR_MAX_BATCH`
-domains in one request.
 
 ---
 
@@ -753,17 +698,6 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 | `WHOIS_BOOTSTRAP_ENABLED` | `1` | Use IANA WHOIS bootstrap |
 | `WHOIS_BOOTSTRAP_SERVER` | `whois.iana.org` | IANA bootstrap WHOIS server |
 
-### DR Checker
-
-| Variable | Default | Description |
-|---|---|---|
-| `DR_API_URL` | `https://api.ahrefs.com/v3/public/domain-rating-free` | Ahrefs public Domain Rating endpoint |
-| `DR_TIMEOUT` | `10` | Per-request timeout (seconds) |
-| `DR_WORKERS` | `8` | Domains looked up in parallel per request — lower this if Ahrefs starts returning "rate limited" |
-| `DR_MAX_BATCH` | `100` | Max domains accepted in one request |
-| `DR_RETRIES` | `1` | Retries after a `429` |
-| `DR_RETRY_BACKOFF` | `5.0` | Pause before a retry (seconds, multiplied by attempt) |
-
 ### Archive / Wayback
 
 | Variable | Default | Description |
@@ -873,13 +807,6 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 
 ## Known limitations
 
-**DR Checker is blocked upstream.** Ahrefs put the free `domain-rating-free`
-endpoint behind bot protection — `403` to a plain request, a Cloudflare
-challenge to a browser-like one. Working around that would mean defeating their
-bot protection, so the options are the official (paid) Ahrefs API with a key, or
-dropping the tab. Everything on our side of the call still works: the batch
-resolves in parallel and reports the real reason per domain.
-
 **One WSGI worker only.** Scan progress lives in `app.checker_state` and the
 Maps pollers are daemon threads — both are per-process. With two workers a
 `/api/status` request can land on a worker that knows nothing about the scan the
@@ -888,8 +815,7 @@ moving that state into SQLite or Redis.
 
 **Domain DB is per-browser, not per-account.** It lives in `localStorage`, so it
 does not sync between machines and is unaffected by who is signed in. Maps data
-*is* account-scoped (`owner_id`); Domain Checker and DR Checker results are not
-persisted at all.
+*is* account-scoped (`owner_id`); Domain Checker results are not persisted at all.
 
 **Only one Maps job runs at a time per account**, and a job's poll thread does
 not survive a restart — `reset_stale_jobs()` marks orphaned `running` jobs as

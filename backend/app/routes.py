@@ -2,10 +2,8 @@
 
 import io
 import threading
-import time
 import zipfile
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from flask import Blueprint, current_app, jsonify, render_template, request, send_file
@@ -37,7 +35,6 @@ from .services import expand_domains
 from .services.rdap_service import load_rdap_bootstrap
 from .utils import (
     DIRECT_LABEL,
-    dedupe,
     mask_proxy_url,
     normalize_domain,
     normalize_proxy_url,
@@ -386,79 +383,3 @@ def get_archive_data():
         return jsonify(_empty_error("Wayback request timed out."))
     except Exception as exc:
         return jsonify(_empty_error(f"Wayback request failed: {str(exc)}"))
-
-
-def _fetch_domain_rating(domain: str, settings: dict) -> dict:
-    """Look up one domain's DR, retrying past rate limits.
-
-    Runs inside a worker thread, so every config value it needs is passed in —
-    current_app is not available off the request thread.
-    """
-    for attempt in range(settings["retries"] + 1):
-        try:
-            resp = requests.get(
-                settings["url"],
-                params={"target": domain},
-                headers={"Accept": "application/json"},
-                timeout=settings["timeout"],
-            )
-        except requests.Timeout:
-            return {"domain": domain, "dr": None, "error": "timeout"}
-        except Exception as exc:
-            return {"domain": domain, "dr": None, "error": str(exc)}
-
-        if resp.status_code == 429:
-            if attempt < settings["retries"]:
-                time.sleep(settings["backoff"] * (attempt + 1))
-                continue
-            return {"domain": domain, "dr": None, "error": "rate limited"}
-
-        if resp.status_code >= 400:
-            return {"domain": domain, "dr": None, "error": f"http {resp.status_code}"}
-
-        try:
-            payload = resp.json() or {}
-        except ValueError:
-            return {"domain": domain, "dr": None, "error": "malformed response"}
-
-        rating = (payload.get("domain_rating") or {}).get("domain_rating")
-        if rating is None:
-            return {"domain": domain, "dr": None, "error": "no rating"}
-
-        return {"domain": domain, "dr": round(float(rating)), "error": ""}
-
-    return {"domain": domain, "dr": None, "error": "rate limited"}
-
-
-@api_bp.route("/dr-check", methods=["POST"])
-def dr_check():
-    """Look up Ahrefs Domain Rating for a batch of domains in parallel."""
-    payload = request.json or {}
-
-    raw = payload.get("domains")
-    if raw is None:
-        raw = [payload.get("domain") or ""]
-    if not isinstance(raw, list):
-        return jsonify({"error": "domains must be a list"}), 400
-
-    domains = dedupe([normalize_domain(item) for item in raw if str(item or "").strip()])
-    domains = [d for d in domains if d]
-    if not domains:
-        return jsonify({"error": "no domains"}), 400
-
-    max_batch = int(current_app.config["DR_MAX_BATCH"])
-    if len(domains) > max_batch:
-        return jsonify({"error": f"Too many domains ({len(domains)} > {max_batch})"}), 400
-
-    settings = {
-        "url": current_app.config["DR_API_URL"],
-        "timeout": float(current_app.config["DR_TIMEOUT"]),
-        "retries": int(current_app.config["DR_RETRIES"]),
-        "backoff": float(current_app.config["DR_RETRY_BACKOFF"]),
-    }
-
-    workers = min(int(current_app.config["DR_WORKERS"]), len(domains))
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        results = list(pool.map(lambda d: _fetch_domain_rating(d, settings), domains))
-
-    return jsonify({"results": results})
