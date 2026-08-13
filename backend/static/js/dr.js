@@ -24,7 +24,7 @@ export async function drStartCheck() {
     if (_drRunning) return;
     const lines = [...new Set((document.getElementById("drInput").value || "")
         .split("\n").map(_drNormalize).filter(Boolean))];
-    if (!lines.length) { alert("Введите домены"); return; }
+    if (!lines.length) { alert("Enter domains"); return; }
 
     _drRunning = true;
     _drStopped = false;

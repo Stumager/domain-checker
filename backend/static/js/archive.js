@@ -48,14 +48,14 @@ function normalizeArchiveRedirect(str) {
 }
 
 const SPAM_LABELS = {
-    parked: "\u0434\u043e\u043c\u0435\u043d \u043f\u0440\u043e\u0434\u0430\u0435\u0442\u0441\u044f",
-    porn: "порно",
-    casino: "казино",
-    pharma: "фарма",
-    betting: "ставки",
-    ideographs: "иероглифы",
-    chinese: "китайский спам",
-    doorway: "дорвеи"
+    parked: "parked / for sale",
+    porn: "adult",
+    casino: "casino",
+    pharma: "pharma",
+    betting: "betting",
+    ideographs: "ideographs",
+    chinese: "chinese spam",
+    doorway: "doorway"
 };
 
 
@@ -97,9 +97,9 @@ function buildArchiveRowHtml(item) {
             groqHtml = `<div class="archive-groq archive-groq--bad"${reasonAttr}>Groq: ${escapeHtml(groqTopic)}</div>`;
         }
     }
-    const topicHtml = item.topic_shift ? `<div class="archive-topic">Смена тематики</div>` : "";
-    const languageHtml = item.language_shift ? `<div class="archive-topic">Смена языка</div>` : "";
-    const cloakingHtml = item.cloaking ? `<div class="archive-cloaking">Клоакинг</div>` : "";
+    const topicHtml = item.topic_shift ? `<div class="archive-topic">Topic shift</div>` : "";
+    const languageHtml = item.language_shift ? `<div class="archive-topic">Language shift</div>` : "";
+    const cloakingHtml = item.cloaking ? `<div class="archive-cloaking">Cloaking</div>` : "";
     let redirectHtml = "";
     if (rawStatus === "301" || rawStatus === "302") {
         if (item.redirect) {

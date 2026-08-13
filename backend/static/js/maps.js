@@ -90,8 +90,8 @@ async function mapsLoadSessions() {
         mapsSessions = await resp.json();
         const select = document.getElementById("mapsSessionSelect");
         if (!select) return;
-        select.innerHTML = '<option value="">Все сессии</option>' + mapsSessions.map(s => {
-            const label = `#${s.id} ${s.niche || s.custom_query || "поиск"} — ${s.city}, ${s.country}`;
+        select.innerHTML = '<option value="">All sessions</option>' + mapsSessions.map(s => {
+            const label = `#${s.id} ${s.niche || s.custom_query || "search"} — ${s.city}, ${s.country}`;
             return `<option value="${s.id}">${escapeHtml(label)}</option>`;
         }).join("");
     } catch (e) {
@@ -305,14 +305,14 @@ async function mapsStatusPoll() {
                 job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—";
         }
 
-        // подтянуть таблицу, когда появились новые домены
+        // Refresh the table once new domains have landed
         const total = data.total_domains ?? 0;
         if (total !== mapsLastDomainCount) {
             mapsLastDomainCount = total;
             if (mapsPage === 1) mapsLoadDomains(1);
         }
     } catch (e) {
-        // сеть моргнула — следующий тик повторит
+        // A blip in the network; the next tick retries
     }
 }
 
@@ -386,19 +386,6 @@ function mapsInitGeoFilters() {
         if (!cityInput.value || allCities.some(item => item.name === cityInput.value)) mapsLoadDomains(1);
     });
     refreshCities();
-    return;
-    country.innerHTML = '<option value="">Все страны</option>' + mapsGeo.map(item =>
-        `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`
-    ).join("");
-    country.onchange = () => {
-        const selected = mapsGeo.find(item => item.name === country.value);
-        city.innerHTML = '<option value="">Все города</option>' + ((selected && selected.cities) || []).map(item =>
-            `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`
-        ).join("");
-        mapsLoadDomains(1);
-    };
-    city.onchange = () => mapsLoadDomains(1);
-    city.innerHTML = '<option value="">Все города</option>';
 }
 
 export async function mapsLoadDomains(page) {
@@ -415,7 +402,7 @@ export async function mapsLoadDomains(page) {
         const data = await resp.json();
         mapsTotalPages = data.pages || 0;
 
-        // фильтр мог сократить выдачу — не оставляем пользователя на пустой странице
+        // A filter can shrink the result set — do not strand the user on an empty page
         if (mapsTotalPages > 0 && mapsPage > mapsTotalPages) {
             return mapsLoadDomains(mapsTotalPages);
         }
@@ -435,7 +422,7 @@ export async function mapsLoadDomains(page) {
                         <td>${escapeHtml(item.city)}</td>
                         <td>${escapeHtml(item.niche)}</td>
                         <td>${escapeHtml((item.discovered_at || "").replace("T", " "))}</td>
-                        <td>${item.exported_at ? "Выгружен" : "Новый"}</td>
+                        <td>${item.exported_at ? "Exported" : "New"}</td>
                     </tr>`).join("")
                 : `<tr><td colspan="6" class="maps-empty">No domains yet — start a scrape to collect them.</td></tr>`;
         }
@@ -518,7 +505,7 @@ export async function mapsLoadProxies(page) {
             checkBtn.textContent = data.checking ? "Checking…" : "Check All";
         }
 
-        // пока проверка идёт — обновляем таблицу
+        // Keep refreshing the table while a check is in flight
         const pagination = document.getElementById("mapsProxyPagination");
         if (pagination) {
             pagination.innerHTML = mapsProxyTotalPages > 1
