@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "checker",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["run.py"],
+      "cwd": "backend",
+      "port": 8080
+    }
+  ]
+}
