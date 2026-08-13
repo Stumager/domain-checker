@@ -1,17 +1,12 @@
 """Main entry point for the application."""
 
 import os
-import sys
 import webbrowser
 from threading import Timer
 
 from dotenv import load_dotenv
 
-if getattr(sys, "frozen", False):
-    _env_path = os.path.join(os.path.dirname(os.path.dirname(sys.executable)), ".env")
-else:
-    _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-load_dotenv(_env_path)
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 from app import create_app
 from config import get_config

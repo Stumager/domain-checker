@@ -3,7 +3,6 @@
 import json
 import math
 import os
-import sys
 import threading
 from datetime import datetime, timezone
 
@@ -37,15 +36,7 @@ def set_config(config: dict):
 
 
 def _data_dir() -> str:
-    """Каталог app/data — с учётом запуска из собранного exe."""
-    if getattr(sys, "frozen", False):
-        for base in (getattr(sys, "_MEIPASS", ""), os.path.dirname(sys.executable)):
-            if not base:
-                continue
-            candidate = os.path.join(base, "app", "data")
-            if os.path.isdir(candidate):
-                return candidate
-
+    """Каталог app/data."""
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 
 
