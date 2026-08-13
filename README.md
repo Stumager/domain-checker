@@ -248,13 +248,28 @@ Open `http://127.0.0.1:8080` and log in (see [Authentication](#authentication)).
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-python -m pytest tests -q
+python -m playwright install chromium   # once, for the browser tests
+python -m pytest -q
 ```
 
-The suite covers the scan pipeline, auth, the DR endpoint and the Maps API
-against a temporary SQLite file — it makes no outbound network calls.
+50 tests, no outbound network calls — everything external is mocked and the
+database is a temporary SQLite file.
 
-The frontend has no automated tests; changes to `static/js` need a click-through.
+| | |
+|---|---|
+| `tests/test_app.py` | 41 API tests: scan pipeline, auth, DR endpoint, Maps API |
+| `tests/test_e2e.py` | 9 browser tests driving the real UI with Playwright |
+
+The browser tests cover what a static check cannot: that `data-action` buttons
+reach their module, that delegated handlers survive a re-render, and that the
+checker tab still calls into the Domain DB module after a scan. They run the app
+in-process, so they can patch `dns_check` and `requests.get`.
+
+Skip them when you have no browser installed:
+
+```bash
+python -m pytest -q -m "not e2e"
+```
 
 ## Docker Compose setup
 
@@ -365,13 +380,17 @@ backend/
 ├── templates/
 │   ├── index.html              # Single-page app shell (all tabs)
 │   └── login.html              # Login / register screen
+├── tests/
+│   ├── test_app.py             # API tests
+│   └── test_e2e.py             # Browser tests (Playwright, marked `e2e`)
 ├── config.py                   # All settings via environment variables
 ├── wsgi.py                     # WSGI entry point (gunicorn) — production
 ├── run.py                      # Flask dev server — local development
 ├── run.bat                     # Windows one-click launcher
 ├── Dockerfile                  # Application image
+├── pytest.ini
 ├── requirements.txt
-└── requirements-dev.txt        # requirements.txt + pytest
+└── requirements-dev.txt        # requirements.txt + pytest + pytest-playwright
 
 docker-compose.yml              # App + gosom/google-maps-scraper (project root)
 docs/
@@ -403,6 +422,8 @@ handler, which keeps working for rows rendered after load.
 **When adding a button:** give it `data-action="yourFunction"`, export
 `yourFunction` from its module, and add it to the `ACTIONS` map in `main.js`.
 An unknown `data-action` logs a console warning rather than failing silently.
+
+Changes here are covered by the browser tests — see [Tests](#tests).
 
 ## API reference
 
