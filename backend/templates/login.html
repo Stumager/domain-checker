@@ -37,21 +37,6 @@
     </div>
 
     <script>
-        // Heartbeat: без него BrowserMonitor решит, что вкладок нет, и закроет приложение
-        (function keepAlive() {
-            const sessionId = (window.crypto && window.crypto.randomUUID)
-                ? window.crypto.randomUUID()
-                : "login-" + Date.now();
-            const ping = () => {
-                fetch("/api/ping?session=" + encodeURIComponent(sessionId), {
-                    method: "POST",
-                    cache: "no-cache"
-                }).catch(() => {});
-            };
-            ping();
-            setInterval(ping, 3000);
-        })();
-
         let loginMode = "login";
 
         function setLoginMode(mode) {

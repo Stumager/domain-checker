@@ -1,24 +1,27 @@
-"""Configuration module for DNS Checker application"""
+"""Configuration module for the Domain Checker application"""
 
 import os
 
 
 class Config:
     """Base configuration"""
-    
-    # Flask settings
-    SECRET_KEY = os.getenv("SECRET_KEY", os.urandom(24).hex())
+
+    # Flask settings.
+    # SECRET_KEY has no fallback on purpose: a per-process random key would give
+    # every WSGI worker its own key, so sessions would break at random.
+    SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
     DEBUG = os.getenv("DEBUG", "False") == "True"
-    HOST = os.getenv("HOST", "127.0.0.1")
+    HOST = os.getenv("HOST", "0.0.0.0")
     PORT = int(os.getenv("PORT", "8080"))
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "").strip()
     MAX_DOMAINS = int(os.getenv("MAX_DOMAINS", "200000"))
-    BROWSER_MONITOR_ENABLED = os.getenv("BROWSER_MONITOR_ENABLED", "1") == "1"
-    BROWSER_MONITOR_TIMEOUT = int(os.getenv("BROWSER_MONITOR_TIMEOUT", "60"))
-    BROWSER_MONITOR_STARTUP_GRACE = int(os.getenv("BROWSER_MONITOR_STARTUP_GRACE", "30"))
-    BROWSER_MONITOR_SHUTDOWN_DELAY = int(os.getenv("BROWSER_MONITOR_SHUTDOWN_DELAY", "3"))
-    AUTO_OPEN_BROWSER = os.getenv("AUTO_OPEN_BROWSER", "1") == "1"
-    
+
+    # Session cookie hardening. SECURE defaults off so plain-HTTP local runs work;
+    # turn it on wherever the app is served over HTTPS.
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "0") == "1"
+
     # RDAP settings
     RDAP_BOOTSTRAP_URL = os.getenv("RDAP_BOOTSTRAP_URL", "https://data.iana.org/rdap/dns.json")
     FINAL_CHECK_ENABLED = os.getenv("FINAL_CHECK_ENABLED", "1") == "1"

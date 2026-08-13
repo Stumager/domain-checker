@@ -11,11 +11,8 @@ from . import db
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
-# Эндпоинты, которые обязаны работать без входа:
-# static — отдача css/js для самой формы логина,
-# browser_ping/browser_disconnect — heartbeat, без которого BrowserMonitor
-# через startup_grace секунд убьёт процесс прямо на странице входа.
-PUBLIC_ENDPOINTS = {"static", "browser_ping", "browser_disconnect"}
+# static — отдача css/js для самой формы логина
+PUBLIC_ENDPOINTS = {"static"}
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD_LENGTH = 6
@@ -77,9 +74,11 @@ def seed_admin(app):
         (email, generate_password_hash(password), _now_iso()),
     )
 
+    # The password is deliberately not echoed — on a server this goes to the logs.
     print("=" * 62)
-    print(f"  WARNING: default account created -> {email} / {password}")
-    print("  Change this password after the first login.")
+    print(f"  Seeded the default account: {email}")
+    print("  Its password is the SEED_ADMIN_PASSWORD value. Change it after")
+    print("  the first login.")
     print("=" * 62)
 
 

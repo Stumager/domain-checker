@@ -1,4 +1,24 @@
 services:
+  checker:
+    build: ./backend
+    container_name: domain-checker
+    # Reuses the same backend/.env the local run uses; only the values that
+    # differ inside the network are overridden below.
+    env_file:
+      - ./backend/.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      # Container-to-container: the scraper's own port, not the published 8090.
+      GMAPS_API_URL: http://gmaps-scraper:8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - checker-data:/app/data
+    depends_on:
+      - gmaps-scraper
+    restart: unless-stopped
+
   gmaps-scraper:
     image: gosom/google-maps-scraper
     container_name: gmaps-scraper
@@ -13,5 +33,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  checker-data:
   gmaps-cache:
   gmaps-data:

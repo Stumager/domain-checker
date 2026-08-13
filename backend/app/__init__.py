@@ -2,13 +2,12 @@
 
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask
 from flask_cors import CORS
 
 from config import Config as DefaultConfig
 
 from . import services
-from .browser_monitor import BrowserMonitor
 from .models import CheckerState
 
 
@@ -25,26 +24,16 @@ def _parse_cors_origins(value):
     return parts
 
 
-def _register_browser_routes(app: Flask):
-    """Register browser heartbeat endpoints on the app."""
+def _require_secret_key(app: Flask):
+    """Fail fast instead of handing every worker a different signing key."""
+    if app.config.get("SECRET_KEY"):
+        return
 
-    def _get_session_id():
-        return (request.args.get("session") or request.headers.get("X-Browser-Session") or "").strip()
-
-    def ping():
-        app.browser_monitor.ping(_get_session_id())
-        return jsonify({"ok": True})
-
-    def browser_disconnect():
-        app.browser_monitor.disconnect(_get_session_id())
-        return jsonify({"ok": True})
-
-    app.add_url_rule("/api/ping", endpoint="browser_ping", view_func=ping, methods=["GET", "POST"])
-    app.add_url_rule(
-        "/api/browser-disconnect",
-        endpoint="browser_disconnect",
-        view_func=browser_disconnect,
-        methods=["POST"],
+    raise RuntimeError(
+        "SECRET_KEY is not set. Sessions are signed with it, so a missing key "
+        "would log everyone out on restart and break logins entirely once more "
+        "than one WSGI worker is running. Generate one and put it in backend/.env:\n"
+        '    python -c "import secrets; print(secrets.token_hex(32))"'
     )
 
 
@@ -65,18 +54,13 @@ def create_app(config=None):
         else:
             app.config.from_object(config)
 
+    _require_secret_key(app)
+
     cors_origins = _parse_cors_origins(app.config.get("CORS_ORIGINS", ""))
     if cors_origins:
         CORS(app, resources={r"/api/*": {"origins": cors_origins}})
 
     app.checker_state = CheckerState()
-    app.browser_monitor = BrowserMonitor(
-        enabled=bool(app.config.get("BROWSER_MONITOR_ENABLED", True)),
-        timeout=int(app.config.get("BROWSER_MONITOR_TIMEOUT", 60)),
-        startup_grace=int(app.config.get("BROWSER_MONITOR_STARTUP_GRACE", 30)),
-        shutdown_delay=int(app.config.get("BROWSER_MONITOR_SHUTDOWN_DELAY", 3)),
-    )
-    _register_browser_routes(app)
 
     rdap_config = {
         "RDAP_BOOTSTRAP_URL": app.config.get("RDAP_BOOTSTRAP_URL"),

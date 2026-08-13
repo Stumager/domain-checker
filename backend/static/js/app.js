@@ -1,74 +1,10 @@
 /* Domain Checker Frontend JavaScript */
 
 let pollInterval = null;
-let pingInterval = null;
 let isChecking = false;
 let isStopping = false;
-let browserSessionId = null;
-let disconnectSent = false;
 let archiveResults = [];
 let archiveIsTruncated = false;
-
-function ensureBrowserSessionId() {
-    if (browserSessionId) {
-        return browserSessionId;
-    }
-
-    if (window.crypto && typeof window.crypto.randomUUID === "function") {
-        browserSessionId = window.crypto.randomUUID();
-    } else {
-        browserSessionId = `browser-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    }
-
-    return browserSessionId;
-}
-
-/**
- * Ping server to indicate browser is active
- */
-async function pingServer() {
-    disconnectSent = false;
-    const sessionId = ensureBrowserSessionId();
-    try {
-        await fetch(`/api/ping?session=${encodeURIComponent(sessionId)}`, {
-            method: "POST",
-            cache: "no-cache",
-            keepalive: true
-        });
-    } catch (e) {}
-}
-
-function disconnectServer() {
-    if (disconnectSent) {
-        return;
-    }
-
-    disconnectSent = true;
-
-    if (pingInterval) {
-        clearInterval(pingInterval);
-        pingInterval = null;
-    }
-
-    if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-    }
-
-    const sessionId = ensureBrowserSessionId();
-    const url = `/api/browser-disconnect?session=${encodeURIComponent(sessionId)}`;
-
-    try {
-        if (navigator.sendBeacon) {
-            navigator.sendBeacon(url);
-            return;
-        }
-    } catch (e) {}
-
-    try {
-        fetch(url, { method: "POST", keepalive: true });
-    } catch (e) {}
-}
 
 /**
  * Start domain checking process
@@ -1637,22 +1573,6 @@ window.addEventListener("DOMContentLoaded", () => {
         });
         rows.forEach(r => tbody.appendChild(r));
     });
-
-    ensureBrowserSessionId();
-    window.addEventListener("pagehide", disconnectServer);
-    window.addEventListener("beforeunload", disconnectServer);
-    window.addEventListener("pageshow", () => {
-        disconnectSent = false;
-        pingServer();
-    });
-    document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) {
-            pingServer();
-        }
-    });
-
-    pingInterval = setInterval(pingServer, 3000);
-    pingServer();
 });
 
 // -----------------------------------------------------------------------------

@@ -30,7 +30,6 @@ class BaseAppTestCase(unittest.TestCase):
     def create_app_and_client(self, login=True, **overrides):
         config = {
             "TESTING": True,
-            "BROWSER_MONITOR_ENABLED": False,
             "FINAL_CHECK_ENABLED": True,
             "DEFAULT_TLDS": "com",
             "SECRET_KEY": "test-secret",
@@ -67,10 +66,8 @@ class CheckerAppTests(BaseAppTestCase):
     def test_create_app_has_core_routes(self):
         client = self.create_client()
 
-        ping = client.post("/api/ping?session=test-browser")
         status = client.get("/api/status")
 
-        self.assertEqual(ping.status_code, 200)
         self.assertEqual(status.status_code, 200)
         self.assertIn("running", status.get_json())
 
@@ -145,13 +142,6 @@ class AuthTests(BaseAppTestCase):
 
         self.assertEqual(client.get("/api/status").status_code, 401)
         self.assertEqual(client.get("/api/maps/niches").status_code, 401)
-
-    def test_ping_stays_public(self):
-        """BrowserMonitor убьёт процесс, если heartbeat начнёт получать 401."""
-        client = self.create_client(login=False)
-
-        self.assertEqual(client.post("/api/ping?session=x").status_code, 200)
-        self.assertEqual(client.post("/api/browser-disconnect?session=x").status_code, 200)
 
     def test_page_serves_login_form_when_anonymous(self):
         client = self.create_client(login=False)

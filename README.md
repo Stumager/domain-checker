@@ -133,13 +133,13 @@ whole running process).
 ### Authentication
 
 The whole app sits behind a session-based login (Flask session + `werkzeug.security`
-password hashing). Only `/api/auth/*`, the browser heartbeat endpoints
-(`/api/ping`, `/api/browser-disconnect`), and static assets are reachable without
-being logged in — every other page and API route redirects to the login form / 401s.
+password hashing). Only `/api/auth/*` and static assets are reachable without being
+logged in — every other page and API route redirects to the login form / 401s.
 
-- On first run, a default account is seeded and printed to the console:
-  `admin@checker.local` / `admin123` (override via `SEED_ADMIN_EMAIL` /
-  `SEED_ADMIN_PASSWORD`). **Change this password after your first login.**
+- On first run, a default account is seeded from `SEED_ADMIN_EMAIL` /
+  `SEED_ADMIN_PASSWORD` (defaults `admin@checker.local` / `admin123`). The email is
+  printed to the console, the password is not. **Set a real password before
+  exposing the app, and change it after your first login.**
 - New accounts can self-register from the login screen ("Create one").
 - Registering a second account does **not** give it access to the first account's
   Maps jobs/domains/proxies (isolated per `owner_id`) — but it *does* share the same
@@ -182,7 +182,13 @@ them in `docs/screenshots/`.
 ```bash
 cd backend
 pip install -r requirements.txt
-cp .env.example .env   # then edit .env as needed
+cp .env.example .env
+```
+
+Then set `SECRET_KEY` in `backend/.env` — the app will not start without it:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 **Windows shortcut:** double-click `backend/run.bat` — it installs dependencies
@@ -190,51 +196,63 @@ and starts the server in one step.
 
 ## Run
 
+Local development — Flask's dev server:
+
 ```bash
 cd backend
 python run.py
 ```
 
-The app opens automatically at `http://127.0.0.1:8080`, shows the login screen
-first (seeded admin account printed to the console on first run — see
-[Authentication](#authentication)), and exits automatically when the browser tab
-is closed.
+Server — gunicorn via the WSGI entry point:
 
-## Docker Compose setup (Maps Scraper)
-
-The Maps tab talks to a separate container running
-[gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) in web/API
-mode. `docker-compose.yml` in the project root defines it:
-
-```yaml
-services:
-  gmaps-scraper:
-    image: gosom/google-maps-scraper
-    command: ["-data-folder", "/gmapsdata", "-cache", "/gmapscache"]
-    ports:
-      - "8090:8080"
-    volumes:
-      - gmaps-cache:/gmapscache
-      - gmaps-data:/gmapsdata
-    restart: unless-stopped
+```bash
+gunicorn -w 1 --threads 8 --timeout 600 -b 0.0.0.0:8080 wsgi:app
 ```
+
+Or the whole stack (app + scraper) in Docker:
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://127.0.0.1:8080` and log in (see [Authentication](#authentication)).
+
+> **Run a single worker.** Scan progress lives in `app.checker_state` and the
+> Maps job pollers are daemon threads — both are per-process. With `-w 2` a
+> request to `/api/status` may land on a worker that knows nothing about the scan
+> another worker is running, so progress appears to jump or reset. Scale with
+> `--threads`, not `-w`, until that state moves out of process memory.
+
+## Docker Compose setup
+
+`docker-compose.yml` in the project root defines two services:
+
+| Service | What |
+|---|---|
+| `checker` | This app, built from `backend/Dockerfile`, gunicorn on `:8080` |
+| `gmaps-scraper` | [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) in web/API mode, published on `:8090` |
+
+`checker` reads the same `backend/.env` as a local run (`env_file`), overriding only
+what differs inside the network — notably `GMAPS_API_URL=http://gmaps-scraper:8080`,
+the scraper's *internal* port rather than the published 8090. The SQLite file lives
+in the `checker-data` volume, so it survives rebuilds.
 
 **Start it** (from the project root, where `docker-compose.yml` lives):
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-The first run pulls the image (Playwright + Chromium inside, so it's a few hundred
-MB — be patient). **Verify it's up:**
+The first run pulls the scraper image (Playwright + Chromium inside, so it's a few
+hundred MB — be patient). **Verify both are up:**
 
 ```bash
 docker compose ps
 ```
 
-You should see `gmaps-scraper` with state `Up`. The Flask app talks to it at
-`http://localhost:8090` by default (`GMAPS_API_URL` in `.env` — only change this if
-you remapped the port or run the scraper on another host).
+Running the app locally instead (`python run.py`) while only the scraper is in
+Docker also works — then `GMAPS_API_URL` stays `http://localhost:8090`, which is
+the default.
 
 **If the container isn't running**, clicking **Start scraping** in the Maps tab
 returns a `503` with a message like *"Google Maps scraper is unreachable at
@@ -298,10 +316,9 @@ backend/
 │   │   └── niches.json         # 20 predefined Maps niches
 │   ├── utils/
 │   │   ├── validators.py       # normalize_domain, to_ascii, is_valid_domain
-│   │   └── helpers.py          # dedupe, parse_tlds, filter_domains_by_tlds
+│   │   └── helpers.py          # dedupe, parse_tlds
 │   ├── models.py               # Thread-safe Domain Checker scan state
 │   ├── check_pipeline.py       # Two-stage DNS + RDAP checking pipeline
-│   ├── browser_monitor.py      # Browser heartbeat monitor, auto-shutdown
 │   ├── db.py                   # SQLite connection helper + schema/migrations (Maps + users)
 │   ├── auth.py                 # Session auth, login_required gate, seed admin account
 │   ├── routes.py               # Domain Checker / Archive / DR Checker endpoints
@@ -313,11 +330,13 @@ backend/
 │   ├── index.html              # Single-page app shell (all tabs)
 │   └── login.html              # Login / register screen
 ├── config.py                   # All settings via environment variables
-├── run.py                      # Entry point
+├── wsgi.py                     # WSGI entry point (gunicorn) — production
+├── run.py                      # Flask dev server — local development
 ├── run.bat                     # Windows one-click launcher
+├── Dockerfile                  # Application image
 └── requirements.txt
 
-docker-compose.yml              # gosom/google-maps-scraper container (project root)
+docker-compose.yml              # App + gosom/google-maps-scraper (project root)
 ```
 
 ## API reference
@@ -576,44 +595,25 @@ Deletes every proxy currently marked `failed`.
 
 ---
 
-### Browser lifecycle
-
-#### `GET /api/ping` · `POST /api/ping`
-Browser heartbeat. Called by the frontend to keep the process alive. Public — does
-**not** require authentication (see [Authentication](#authentication)).
-Accepts optional `session` query parameter or `X-Browser-Session` header.
-
-#### `POST /api/browser-disconnect`
-Signal that the browser tab was closed. Triggers the shutdown timer. Also public.
-
 ## Configuration
 
-Copy `.env.example` to `backend/.env` and adjust as needed.
-All variables are optional — the defaults work out of the box.
+Copy `.env.example` to `backend/.env` and adjust as needed. Everything is optional
+**except `SECRET_KEY`** — the app refuses to start without it.
 
 ### Server / Auth
 
 | Variable | Default | Description |
 |---|---|---|
-| `HOST` | `127.0.0.1` | Bind address |
+| `SECRET_KEY` | — | **Required.** Signs the auth session cookie. Generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8080` | HTTP port |
 | `DEBUG` | `False` | Enable Flask debug mode |
-| `SECRET_KEY` | _(random)_ | Flask secret key — also signs the auth session cookie |
+| `SESSION_COOKIE_SECURE` | `0` | Set to `1` when serving over HTTPS |
 | `CORS_ORIGINS` | _(empty)_ | Comma-separated allowed CORS origins; empty = disabled |
 | `MAX_DOMAINS` | `200000` | Max domains accepted per scan request |
-| `AUTO_OPEN_BROWSER` | `1` | Open browser automatically on startup |
 | `SEED_ADMIN_EMAIL` | `admin@checker.local` | Account created on first run if no users exist |
-| `SEED_ADMIN_PASSWORD` | `admin123` | Password for the seeded account — change it after first login |
+| `SEED_ADMIN_PASSWORD` | `admin123` | Password for the seeded account — set a real one before exposing the app |
 | `MAPS_DB_PATH` | _(empty → `backend/data/maps.db`)_ | SQLite file for Maps tables + `users` |
-
-### Browser monitor
-
-| Variable | Default | Description |
-|---|---|---|
-| `BROWSER_MONITOR_ENABLED` | `1` | Exit process when browser tab closes |
-| `BROWSER_MONITOR_TIMEOUT` | `60` | Seconds without a ping before exit |
-| `BROWSER_MONITOR_STARTUP_GRACE` | `30` | Seconds after startup before monitoring begins |
-| `BROWSER_MONITOR_SHUTDOWN_DELAY` | `3` | Seconds to wait before process exit |
 
 ### Scan / RDAP
 

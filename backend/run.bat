@@ -13,7 +13,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo Starting DNS Checker...
+echo Starting Domain Checker...
 echo Open browser: http://127.0.0.1:8080
 echo.
 

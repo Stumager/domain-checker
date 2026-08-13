@@ -1,33 +1,31 @@
-"""Main entry point for the application."""
+"""Local development entry point.
+
+Servers run the app through wsgi.py; this module exists so `python run.py`
+still starts something usable while developing.
+"""
 
 import os
-import webbrowser
-from threading import Timer
 
 from dotenv import load_dotenv
 
+# Must run before config is imported: Config reads os.getenv at class-body time.
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-from app import create_app
-from config import get_config
-
-
-def open_browser(host, port):
-    """Open the app in the default browser."""
-    webbrowser.open_new(f"http://{host}:{port}/")
+from app import create_app  # noqa: E402
+from config import get_config  # noqa: E402
 
 
 if __name__ == "__main__":
-    config_class = get_config()
-    app = create_app(config_class)
+    app = create_app(get_config())
 
-    host = app.config.get("HOST", "127.0.0.1")
+    host = app.config.get("HOST", "0.0.0.0")
     port = app.config.get("PORT", 8080)
-    debug = bool(app.config.get("DEBUG", False))
 
-    print(f"Starting DNS Checker on {host}:{port}")
-
-    app.browser_monitor.start()
-    if app.config.get("AUTO_OPEN_BROWSER", True):
-        Timer(1.5, lambda: open_browser(host, port)).start()
-    app.run(host=host, port=port, debug=debug, threaded=True, use_reloader=False)
+    print(f"Starting Domain Checker on http://{host}:{port}")
+    app.run(
+        host=host,
+        port=port,
+        debug=bool(app.config.get("DEBUG", False)),
+        threaded=True,
+        use_reloader=False,
+    )
