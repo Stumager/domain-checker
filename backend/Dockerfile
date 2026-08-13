@@ -20,5 +20,4 @@ EXPOSE 8080
 # One worker on purpose — scan state and Maps pollers are per-process,
 # see the note at the top of wsgi.py. Scale with --threads instead.
 # The Wayback endpoint legitimately runs for minutes, hence the long timeout.
-CMD ["gunicorn", "-w", "1", "--threads", "8", "--timeout", "600", \
-     "-b", "0.0.0.0:8080", "wsgi:app"]
+CMD ["gunicorn", "-w", "1", "--threads", "8", "--timeout", "600", "-b", "0.0.0.0:8080", "wsgi:app"]
