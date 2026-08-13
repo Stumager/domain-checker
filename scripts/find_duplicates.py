@@ -1,7 +1,6 @@
 """Utility script for finding and deduplicating domains"""
 
 import sys
-from pathlib import Path
 
 
 def find_duplicates(domain_list):

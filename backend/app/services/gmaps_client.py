@@ -64,13 +64,6 @@ def pick(payload: dict, *names):
     return None
 
 
-def health() -> bool:
-    try:
-        return _request("GET", "/api/v1/jobs").status_code < 500
-    except GmapsUnavailable:
-        return False
-
-
 def create_gmaps_job(payload: dict) -> str:
     response = _request("POST", "/api/v1/jobs", json=payload)
     if response.status_code >= 400:
@@ -115,7 +108,7 @@ def download_gmaps_csv(gmaps_job_id: str) -> str:
     # The scraper emits UTF-8 CSV, so use the declared charset when present and
     # otherwise decode as UTF-8 to preserve non-ASCII business names/addresses.
     content_type = response.headers.get("Content-Type", "")
-    charset = re.search(r"charset\s*=\s*([\\w.-]+)", content_type, re.IGNORECASE)
+    charset = re.search(r"charset\s*=\s*([\w.-]+)", content_type, re.IGNORECASE)
     response.encoding = charset.group(1) if charset else "utf-8"
     return response.text
 

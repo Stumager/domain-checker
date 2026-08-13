@@ -80,17 +80,6 @@ def find_country(name_or_code: str):
     return None
 
 
-def find_city(country: dict, city_name: str):
-    needle = (city_name or "").strip().casefold()
-    if not country or not needle:
-        return None
-
-    for city in country.get("cities") or []:
-        if city["name"].casefold() == needle:
-            return city
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Язык страны
 # ---------------------------------------------------------------------------
@@ -146,10 +135,6 @@ def warm_language_cache():
 
 def start_language_warmup():
     threading.Thread(target=warm_language_cache, daemon=True).start()
-
-
-def language_ready() -> bool:
-    return _LANG_WARMED
 
 
 def default_language(country_name: str, country_code: str = "") -> str:

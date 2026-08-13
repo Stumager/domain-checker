@@ -3,7 +3,6 @@
 import socket
 import time
 import threading
-from typing import Optional
 
 from ..utils import normalize_domain, is_valid_domain, to_ascii
 

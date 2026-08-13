@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timezone
 from functools import wraps
 
-from flask import Blueprint, current_app, jsonify, render_template, request, session
+from flask import Blueprint, jsonify, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
