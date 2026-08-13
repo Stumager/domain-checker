@@ -1370,10 +1370,14 @@ function _drNormalize(raw) {
     return s;
 }
 
+// Sent per request; the server resolves the whole chunk in parallel. Smaller
+// chunks show progress sooner, larger ones cut round-trips.
+const DR_BATCH_SIZE = 20;
+
 async function drStartCheck() {
     if (_drRunning) return;
-    const lines = (document.getElementById("drInput").value || "")
-        .split("\n").map(_drNormalize).filter(Boolean);
+    const lines = [...new Set((document.getElementById("drInput").value || "")
+        .split("\n").map(_drNormalize).filter(Boolean))];
     if (!lines.length) { alert("Введите домены"); return; }
 
     _drRunning = true;
@@ -1388,50 +1392,40 @@ async function drStartCheck() {
     document.getElementById("drTbody").innerHTML = "";
     document.getElementById("drExportRow").style.display = "none";
 
-    for (let i = 0; i < lines.length; i++) {
-        if (_drStopped) break;
-        const domain = lines[i];
-        document.getElementById("drProgressText").textContent =
-            `Checking ${i + 1} / ${lines.length}: ${domain}`;
+    const tbody = document.getElementById("drTbody");
 
-        let drValue = "—";
+    for (let start = 0; start < lines.length && !_drStopped; start += DR_BATCH_SIZE) {
+        const batch = lines.slice(start, start + DR_BATCH_SIZE);
+        const upTo = Math.min(start + batch.length, lines.length);
+        document.getElementById("drProgressText").textContent =
+            `Checking ${start + 1}–${upTo} / ${lines.length}`;
+
+        let results = [];
         try {
             const r = await fetch("/api/dr-check", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ domain }),
+                body: JSON.stringify({ domains: batch }),
             });
-            if (r.status === 429) {
-                await new Promise(res => setTimeout(res, 5000));
-                const r2 = await fetch("/api/dr-check", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ domain }),
-                });
-                if (r2.ok) {
-                    const d2 = await r2.json();
-                    const v = d2?.domain_rating?.domain_rating;
-                    if (v !== undefined && v !== null) drValue = String(Math.round(v));
-                }
-            } else if (r.ok) {
-                const d = await r.json();
-                const v = d?.domain_rating?.domain_rating;
-                if (v !== undefined && v !== null) drValue = String(Math.round(v));
+            if (r.ok) {
+                results = (await r.json()).results || [];
             }
-        } catch (_) { /* network error → leave "—" */ }
+        } catch (_) { /* network error → placeholders below */ }
 
-        _drResults.push({ domain, dr: drValue });
-        const tbody = document.getElementById("drTbody");
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${escapeHtml(domain)}</td><td>${escapeHtml(drValue)}</td>`;
-        tbody.appendChild(tr);
-        drOriginalRows = Array.from(document.getElementById("drTbody").rows);
-
-        if (i === 0) document.getElementById("drExportRow").style.display = "block";
-
-        if (i < lines.length - 1 && !_drStopped) {
-            await new Promise(res => setTimeout(res, 300));
+        if (!results.length) {
+            results = batch.map(domain => ({ domain, dr: null }));
         }
+
+        for (const item of results) {
+            const drValue = (item.dr === null || item.dr === undefined) ? "—" : String(item.dr);
+            _drResults.push({ domain: item.domain, dr: drValue });
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${escapeHtml(item.domain)}</td><td>${escapeHtml(drValue)}</td>`;
+            tbody.appendChild(tr);
+        }
+
+        drOriginalRows = Array.from(tbody.rows);
+        document.getElementById("drExportRow").style.display = "block";
     }
 
     _drRunning = false;

@@ -61,14 +61,19 @@ it does not sync between machines and is not affected by who is logged in.
 
 ### DR Checker tab
 
-Bulk-looks up Ahrefs' free Domain Rating for a list of domains, one at a time:
+Bulk-looks up Ahrefs' free Domain Rating for a list of domains:
 
-1. Paste domains (one per line) and click **Check DR**
-2. Each domain is queried sequentially against `/api/dr-check`, which proxies
-   Ahrefs' public `domain-rating-free` endpoint server-side
-3. A `429` (rate limited) response is retried once after a 5-second pause
+1. Paste domains (one per line) and click **Check DR** — duplicates are dropped
+2. Domains go to `/api/dr-check` in chunks of 20; the server resolves each chunk
+   in parallel (`DR_WORKERS`, default 8) against Ahrefs' public
+   `domain-rating-free` endpoint, and results render chunk by chunk
+3. A `429` (rate limited) response is retried after a pause (`DR_RETRIES`,
+   `DR_RETRY_BACKOFF`); a domain that still fails shows `—` and does not affect
+   the rest of the batch
 4. Click the **DR** column header to sort ascending/descending/original order
 5. **Export CSV** downloads `domain;dr` as a semicolon-separated file with a UTF-8 BOM
+
+> If you start seeing "rate limited" results, lower `DR_WORKERS`.
 
 ### Maps Scraper tab
 
@@ -482,12 +487,29 @@ Fetch and analyze Wayback Machine history for a domain.
 ### DR Checker
 
 #### `POST /api/dr-check`
-Proxies Ahrefs' free Domain Rating API for a single domain.
+Looks up Ahrefs' free Domain Rating for a batch of domains, resolved in parallel.
 
-**Request body:** `{"domain": "example.com"}`
+**Request body:** `{"domains": ["example.com", "example.net"]}`
+Also accepts the single form `{"domain": "example.com"}`. Input is normalized
+(scheme/path stripped) and deduplicated.
 
-**Response:** passthrough of Ahrefs' JSON response (`domain_rating.domain_rating`
-holds the score), same status code Ahrefs returned. `502` on timeout/network error.
+**Response (200):**
+
+```json
+{
+  "results": [
+    {"domain": "example.com", "dr": 42, "error": ""},
+    {"domain": "example.net", "dr": null, "error": "rate limited"}
+  ]
+}
+```
+
+`dr` is the rounded rating, or `null` when the lookup failed — `error` then says
+why (`timeout`, `rate limited`, `http 503`, `no rating`, …). One failing domain
+does not fail the batch.
+
+**Errors:** `400` empty input, `domains` not a list, or more than `DR_MAX_BATCH`
+domains in one request.
 
 ---
 
@@ -653,6 +675,10 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 |---|---|---|
 | `DR_API_URL` | `https://api.ahrefs.com/v3/public/domain-rating-free` | Ahrefs public Domain Rating endpoint |
 | `DR_TIMEOUT` | `10` | Per-request timeout (seconds) |
+| `DR_WORKERS` | `8` | Domains looked up in parallel per request — lower this if Ahrefs starts returning "rate limited" |
+| `DR_MAX_BATCH` | `100` | Max domains accepted in one request |
+| `DR_RETRIES` | `1` | Retries after a `429` |
+| `DR_RETRY_BACKOFF` | `5.0` | Pause before a retry (seconds, multiplied by attempt) |
 
 ### Archive / Wayback
 
