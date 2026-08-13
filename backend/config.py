@@ -62,7 +62,22 @@ class Config:
     # TLDs where DNS prefilter is trusted; others treat unknown as RDAP candidates
     DNS_PREFILTER_STRICT_TLDS = os.getenv("DNS_PREFILTER_STRICT_TLDS", "com in co mx vn").strip()
 
+    # DNS prefilter stage
+    DNS_RESOLVERS = os.getenv("DNS_RESOLVERS", "1.1.1.1 8.8.8.8").strip()
+    DNS_TIMEOUT = float(os.getenv("DNS_TIMEOUT", "1.6"))
+    DNS_RETRIES = int(os.getenv("DNS_RETRIES", "2"))
+
+    # DR Checker — Ahrefs public Domain Rating endpoint
+    DR_API_URL = os.getenv(
+        "DR_API_URL", "https://api.ahrefs.com/v3/public/domain-rating-free"
+    ).strip()
+    DR_TIMEOUT = float(os.getenv("DR_TIMEOUT", "10"))
+
     # Wayback archive settings
+    ARCHIVE_USER_AGENT = os.getenv(
+        "ARCHIVE_USER_AGENT",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    ).strip()
     ARCHIVE_YEAR_FROM = int(os.getenv("ARCHIVE_YEAR_FROM", "1998"))
     ARCHIVE_YEAR_TO = int(os.getenv("ARCHIVE_YEAR_TO", "2026"))
     ARCHIVE_TIMEOUT = float(os.getenv("ARCHIVE_TIMEOUT", "45"))

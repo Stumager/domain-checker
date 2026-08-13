@@ -210,7 +210,7 @@ def get_archive_data():
     raw_proxy = (payload.get("proxy") or "").strip()
     proxy_url = _normalize_proxy_url(raw_proxy) if raw_proxy else ""
 
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers = {"User-Agent": current_app.config["ARCHIVE_USER_AGENT"]}
     proxy_state = {
         "enabled": bool(proxy_url),
         "mode": "proxy" if proxy_url else "direct",
@@ -390,10 +390,10 @@ def dr_check():
         return jsonify({"error": "no domain"}), 400
     try:
         resp = requests.get(
-            "https://api.ahrefs.com/v3/public/domain-rating-free",
+            current_app.config["DR_API_URL"],
             params={"target": domain},
             headers={"Accept": "application/json"},
-            timeout=10,
+            timeout=float(current_app.config["DR_TIMEOUT"]),
         )
         return jsonify(resp.json()), resp.status_code
     except requests.Timeout:

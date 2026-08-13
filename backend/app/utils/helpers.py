@@ -8,6 +8,16 @@ def dedupe(lst: List[str]) -> List[str]:
     return list(dict.fromkeys(lst))
 
 
+def split_list(raw: str) -> List[str]:
+    """Split a comma/semicolon/space separated env value, preserving case."""
+    parts: List[str] = []
+    for token in (raw or "").replace(",", " ").replace(";", " ").split():
+        item = token.strip()
+        if item:
+            parts.append(item)
+    return dedupe(parts)
+
+
 def parse_tlds(raw: str) -> List[str]:
     """Parse TLD string into list of TLDs"""
     raw = (raw or "").strip().lower()

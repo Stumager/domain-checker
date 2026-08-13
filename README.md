@@ -621,6 +621,9 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 |---|---|---|
 | `DEFAULT_TLDS` | `es it pl fr de pt nl be se fi no dk tr in ca br mx co` | TLDs appended to bare labels |
 | `DNS_PREFILTER_STRICT_TLDS` | `com in co mx vn` | TLDs where DNS result is trusted without RDAP |
+| `DNS_RESOLVERS` | `1.1.1.1 8.8.8.8` | Nameservers used by the DNS prefilter |
+| `DNS_TIMEOUT` | `1.6` | Per-query DNS timeout (seconds) |
+| `DNS_RETRIES` | `2` | DNS retry count on timeout |
 | `FINAL_CHECK_ENABLED` | `1` | Enable RDAP second-pass check |
 | `FINAL_CHECK_WORKERS` | `20` | RDAP parallel workers |
 | `RDAP_BOOTSTRAP_URL` | `https://data.iana.org/rdap/dns.json` | IANA RDAP endpoint registry |
@@ -644,10 +647,18 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 | `WHOIS_BOOTSTRAP_ENABLED` | `1` | Use IANA WHOIS bootstrap |
 | `WHOIS_BOOTSTRAP_SERVER` | `whois.iana.org` | IANA bootstrap WHOIS server |
 
+### DR Checker
+
+| Variable | Default | Description |
+|---|---|---|
+| `DR_API_URL` | `https://api.ahrefs.com/v3/public/domain-rating-free` | Ahrefs public Domain Rating endpoint |
+| `DR_TIMEOUT` | `10` | Per-request timeout (seconds) |
+
 ### Archive / Wayback
 
 | Variable | Default | Description |
 |---|---|---|
+| `ARCHIVE_USER_AGENT` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36` | User-Agent sent to Wayback |
 | `ARCHIVE_YEAR_FROM` | `1998` | Earliest snapshot year to fetch |
 | `ARCHIVE_YEAR_TO` | `2026` | Latest snapshot year to fetch |
 | `ARCHIVE_TIMEOUT` | `45` | CDX request timeout (seconds) |

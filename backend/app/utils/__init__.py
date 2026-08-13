@@ -1,7 +1,7 @@
 """Utilities package"""
 
 from .validators import normalize_domain, to_ascii, is_valid_domain
-from .helpers import dedupe, parse_tlds
+from .helpers import dedupe, parse_tlds, split_list
 
 __all__ = [
     "normalize_domain",
@@ -9,4 +9,5 @@ __all__ = [
     "is_valid_domain",
     "dedupe",
     "parse_tlds",
+    "split_list",
 ]

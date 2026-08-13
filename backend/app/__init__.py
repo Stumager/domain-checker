@@ -9,19 +9,7 @@ from config import Config as DefaultConfig
 
 from . import services
 from .models import CheckerState
-
-
-def _parse_cors_origins(value):
-    raw = (value or "").strip()
-    if not raw:
-        return []
-
-    parts = []
-    for token in raw.replace(";", ",").split(","):
-        item = token.strip()
-        if item:
-            parts.append(item)
-    return parts
+from .utils import split_list
 
 
 def _require_secret_key(app: Flask):
@@ -56,7 +44,7 @@ def create_app(config=None):
 
     _require_secret_key(app)
 
-    cors_origins = _parse_cors_origins(app.config.get("CORS_ORIGINS", ""))
+    cors_origins = split_list(app.config.get("CORS_ORIGINS", ""))
     if cors_origins:
         CORS(app, resources={r"/api/*": {"origins": cors_origins}})
 
@@ -85,6 +73,12 @@ def create_app(config=None):
         "WHOIS_BOOTSTRAP_SERVER": app.config.get("WHOIS_BOOTSTRAP_SERVER"),
     }
     services.rdap_service.set_config(rdap_config)
+
+    services.dns_checker.set_config({
+        "DNS_RESOLVERS": split_list(app.config.get("DNS_RESOLVERS", "")),
+        "DNS_TIMEOUT": app.config.get("DNS_TIMEOUT"),
+        "DNS_RETRIES": app.config.get("DNS_RETRIES"),
+    })
 
     _init_maps_module(app)
 
