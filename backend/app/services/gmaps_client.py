@@ -15,6 +15,7 @@ import re
 
 import requests
 
+from ..utils import apply_config
 from . import geo_data
 from .proxy_service import working_proxies
 
@@ -35,9 +36,8 @@ class GmapsError(RuntimeError):
 
 
 def set_config(config: dict):
-    for key, value in (config or {}).items():
-        if value not in (None, ""):
-            _CONFIG[key] = value
+    # Shares one dict with maps_service, so unknown keys here are its keys.
+    apply_config(_CONFIG, config, source="gmaps_client", warn_unknown=False)
 
 
 def _api_url(path: str) -> str:

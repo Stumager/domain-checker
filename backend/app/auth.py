@@ -2,13 +2,13 @@
 
 import logging
 import re
-from datetime import datetime, timezone
 from functools import wraps
 
 from flask import Blueprint, jsonify, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db
+from .utils import now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,6 @@ PUBLIC_ENDPOINTS = {"static"}
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD_LENGTH = 6
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def current_user():
@@ -74,7 +70,7 @@ def seed_admin(app):
 
     db.execute(
         "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-        (email, generate_password_hash(password), _now_iso()),
+        (email, generate_password_hash(password), now_iso()),
     )
 
     # The password is deliberately not logged.
@@ -117,7 +113,7 @@ def register():
 
     user_id = db.execute(
         "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-        (email, generate_password_hash(password), _now_iso()),
+        (email, generate_password_hash(password), now_iso()),
     )
     session["user_id"] = user_id
 

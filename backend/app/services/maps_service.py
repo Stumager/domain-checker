@@ -9,10 +9,10 @@ import json
 import logging
 import re
 import threading
-from datetime import datetime, timezone
 
 from .. import db
-from ..utils import normalize_domain as _strip_url, parse_tlds
+from ..utils import apply_config, now_iso, parse_tlds
+from ..utils import normalize_domain as _strip_url
 from . import geo_data
 from .gmaps_client import (
     GmapsError,
@@ -54,15 +54,9 @@ __all__ = [
 
 def set_config(config: dict):
     """Настройки поллинга остаются здесь, остальное уходит в клиент."""
-    for key, value in (config or {}).items():
-        if key in _CONFIG and value not in (None, ""):
-            _CONFIG[key] = value
-
+    # One dict feeds both halves, so neither warns about the other's keys.
+    apply_config(_CONFIG, config, source="maps_service", warn_unknown=False)
     set_client_config(config)
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +100,7 @@ def ingest_csv(text: str, job: dict) -> int:
     if not batch:
         return 0
 
-    discovered_at = _now_iso()
+    discovered_at = now_iso()
     added = 0
     with db.get_connection() as conn:
         for domain, business_name in batch.items():
@@ -261,7 +255,7 @@ def start_job(params: dict, owner_id=1) -> dict:
             float(params.get("grid_cell") or _CONFIG["GMAPS_DEFAULT_GRID_CELL"]),
             int(params.get("zoom") or _CONFIG["GMAPS_DEFAULT_ZOOM"]),
             custom_query,
-            _now_iso(),
+            now_iso(),
             json.dumps(bbox),
             len(cells),
         ),
@@ -276,7 +270,7 @@ def start_job(params: dict, owner_id=1) -> dict:
 
     db.execute(
         "UPDATE maps_jobs SET gmaps_job_id = ?, last_run_at = ? WHERE id = ?",
-        (gmaps_job_id, _now_iso(), job_id),
+        (gmaps_job_id, now_iso(), job_id),
     )
 
     _stop_event(job_id).clear()
@@ -316,7 +310,7 @@ def _start_next_cycle(job_id: int, owner_id=None) -> str:
         gmaps_job_id = create_gmaps_job(build_payload(job, bbox))
         db.execute(
             "UPDATE maps_jobs SET gmaps_job_id = ?, last_run_at = ? WHERE id = ?",
-            (gmaps_job_id, _now_iso(), job_id),
+            (gmaps_job_id, now_iso(), job_id),
         )
         return gmaps_job_id
 
@@ -332,7 +326,7 @@ def _start_next_cycle(job_id: int, owner_id=None) -> str:
     gmaps_job_id = create_gmaps_job(build_payload(job, cells[completed]))
     db.execute(
         "UPDATE maps_jobs SET gmaps_job_id = ?, last_run_at = ? WHERE id = ?",
-        (gmaps_job_id, _now_iso(), job_id),
+        (gmaps_job_id, now_iso(), job_id),
     )
     return gmaps_job_id
 

@@ -5,11 +5,11 @@ import logging
 import math
 import os
 import threading
-from datetime import datetime, timezone
 
 import requests
 
 from .. import db
+from ..utils import apply_config, now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,7 @@ class GeoDataMissing(RuntimeError):
 
 
 def set_config(config: dict):
-    for key, value in (config or {}).items():
-        if value not in (None, ""):
-            _CONFIG[key] = value
+    apply_config(_CONFIG, config, source="geo_data")
 
 
 def _data_dir() -> str:
@@ -188,10 +186,6 @@ def geo_with_languages():
 # Bounding box через Nominatim (с кэшем в БД)
 # ---------------------------------------------------------------------------
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
 def _cached_bbox(city: str, country: str):
     row = db.query_one(
         "SELECT bbox FROM maps_bbox_cache WHERE city = ? AND country = ?",
@@ -211,7 +205,7 @@ def _cached_bbox(city: str, country: str):
 def _store_bbox(city: str, country: str, bbox):
     db.execute(
         "INSERT OR REPLACE INTO maps_bbox_cache (city, country, bbox, cached_at) VALUES (?, ?, ?, ?)",
-        (city.casefold(), country.casefold(), json.dumps(bbox), _now_iso()),
+        (city.casefold(), country.casefold(), json.dumps(bbox), now_iso()),
     )
 
 

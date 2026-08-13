@@ -16,8 +16,6 @@ from .archive.fetcher import (
     _fetch_archive_rows,
     _fmt_ts,
     _iter_archive_cdx_urls,
-    _mask_proxy_url,
-    _normalize_proxy_url,
     _normalize_wayback_location,
 )
 from .archive.reputation import (
@@ -37,7 +35,14 @@ from .check_pipeline import run_check
 from .models import CheckerState
 from .services import expand_domains
 from .services.rdap_service import load_rdap_bootstrap
-from .utils import dedupe, normalize_domain, parse_tlds
+from .utils import (
+    DIRECT_LABEL,
+    dedupe,
+    mask_proxy_url,
+    normalize_domain,
+    normalize_proxy_url,
+    parse_tlds,
+)
 
 web_bp = Blueprint("web", __name__)
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -208,13 +213,13 @@ def get_archive_data():
         return jsonify({"error": "No domain"}), 400
 
     raw_proxy = (payload.get("proxy") or "").strip()
-    proxy_url = _normalize_proxy_url(raw_proxy) if raw_proxy else ""
+    proxy_url = normalize_proxy_url(raw_proxy) if raw_proxy else ""
 
     headers = {"User-Agent": current_app.config["ARCHIVE_USER_AGENT"]}
     proxy_state = {
         "enabled": bool(proxy_url),
         "mode": "proxy" if proxy_url else "direct",
-        "current": _mask_proxy_url(proxy_url) if proxy_url else "Direct connection",
+        "current": mask_proxy_url(proxy_url) if proxy_url else DIRECT_LABEL,
     }
     year_from = int(current_app.config.get("ARCHIVE_YEAR_FROM", 1998))
     year_to = int(current_app.config.get("ARCHIVE_YEAR_TO", 2026))

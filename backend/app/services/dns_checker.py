@@ -4,7 +4,7 @@ import socket
 import time
 import threading
 
-from ..utils import normalize_domain, is_valid_domain, to_ascii
+from ..utils import apply_config, normalize_domain, is_valid_domain, to_ascii
 
 # Try to import dnspython for advanced DNS checking
 try:
@@ -26,9 +26,7 @@ _CONFIG = {
 
 
 def set_config(config: dict):
-    for key, value in (config or {}).items():
-        if key in _CONFIG and value not in (None, "", []):
-            _CONFIG[key] = value
+    apply_config(_CONFIG, config, source="dns_checker")
 
 
 def _get_dns_resolver(timeout: float):

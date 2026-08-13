@@ -2,12 +2,11 @@
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 
 import requests
 
 from .. import db
-from ..archive.fetcher import _mask_proxy_url, _normalize_proxy_url, _proxy_kwargs
+from ..utils import apply_config, escape_like, mask_proxy_url, normalize_proxy_url, now_iso, proxy_kwargs
 
 _CHECK_LOCK = threading.Lock()
 _CHECK_RUNNING = False
@@ -20,13 +19,7 @@ _CONFIG = {
 
 
 def set_config(config: dict):
-    for key, value in (config or {}).items():
-        if value not in (None, ""):
-            _CONFIG[key] = value
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    apply_config(_CONFIG, config, source="proxy_service")
 
 
 def parse_proxy_list(raw: str):
@@ -39,7 +32,7 @@ def parse_proxy_list(raw: str):
         if not token:
             continue
 
-        proxy = _normalize_proxy_url(token)
+        proxy = normalize_proxy_url(token)
         if not proxy or proxy in seen:
             continue
 
@@ -61,7 +54,7 @@ def add_proxies(raw: str, owner_id=1) -> int:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO maps_proxies (owner_id, proxy, status, last_checked, added_at) "
                 "VALUES (?, ?, 'unknown', '', ?)",
-                (owner_id, proxy, _now_iso()),
+                (owner_id, proxy, now_iso()),
             )
             added += cur.rowcount or 0
 
@@ -75,8 +68,7 @@ def list_proxies(owner_id=1, page=None, limit=10, search=""):
     search = (search or "").strip()
     if search:
         clauses.append("proxy LIKE ? ESCAPE '\\'")
-        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        params.append(f"%{escaped}%")
+        params.append(f"%{escape_like(search)}%")
 
     where = " AND ".join(clauses)
     total_row = db.query_one(f"SELECT COUNT(*) AS n FROM maps_proxies WHERE {where}", tuple(params))
@@ -90,7 +82,7 @@ def list_proxies(owner_id=1, page=None, limit=10, search=""):
         params.extend([limit, max(0, page - 1) * limit])
     rows = db.query_all(query, tuple(params))
     for row in rows:
-        row["proxy_masked"] = _mask_proxy_url(row["proxy"])
+        row["proxy_masked"] = mask_proxy_url(row["proxy"])
     return rows, total
 
 
@@ -129,7 +121,7 @@ def _check_one(proxy: str) -> str:
         response = requests.get(
             _CONFIG["PROXY_CHECK_URL"],
             timeout=float(_CONFIG["PROXY_CHECK_TIMEOUT"]),
-            **_proxy_kwargs(proxy),
+            **proxy_kwargs(proxy),
         )
         return "working" if response.status_code < 400 else "failed"
     except Exception:
@@ -147,7 +139,7 @@ def _check_all_worker(owner_id=1):
         with ThreadPoolExecutor(max_workers=workers) as pool:
             statuses = list(pool.map(lambda row: _check_one(row["proxy"]), rows))
 
-        checked_at = _now_iso()
+        checked_at = now_iso()
         with db.get_connection() as conn:
             for row, status in zip(rows, statuses):
                 conn.execute(
