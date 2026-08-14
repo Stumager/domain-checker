@@ -98,10 +98,10 @@ repeats automatically** — a new scrape is queued immediately — until you cli
 domains found so far, and the timestamp of the last cycle.
 
 **Advanced Settings** (collapsible): `depth` (how far to scroll the results list),
-`concurrency` and `grid_cell` (stored with the job for forward-compatibility — the
-current gmaps *web* API does not read these two, see the caveat below), `zoom`
-(Google Maps zoom level), and a `custom_query` override that replaces the generated
-`"{niche} in {city}"` query entirely. Hover any field for a tooltip.
+`zoom` (Google Maps zoom level), `grid cell, km` (how finely the city is split into
+scrape cycles — see the caveat below for how this actually reaches the scraper),
+and a `custom_query` override that replaces the generated `"{niche} in {city}"`
+query entirely. Hover any field for a tooltip.
 
 **Proxy Settings** (collapsible): paste one proxy per line (`ip:port`,
 `ip:port:user:pass`, or `http://user:pass@ip:port`), click **Add**, then
@@ -119,11 +119,16 @@ whole running process).
 
 > **Known limitation**: the gmaps-scraper web API (as of this writing) only accepts
 > `keywords, lang, zoom, lat, lon, radius, depth, max_time, proxies` in its job
-> payload — `grid_bbox`/`grid_cell`/`concurrency` are CLI-only flags that the HTTP
-> API silently ignores. To still get real city targeting, this app converts the
-> resolved bounding box into a center `lat`/`lon` + `radius` instead, which the API
-> does honor. `grid_cell` and `concurrency` are still stored per-job and sent in the
-> payload for forward-compatibility, in case a future scraper version reads them.
+> payload — the literal `grid_bbox`/`grid_cell`/`concurrency` JSON fields are
+> CLI-only flags that the HTTP API silently ignores if sent directly.
+>
+> `grid_cell` still works, just indirectly: this app splits the city's bounding box
+> into `grid_cell`-sized cells itself, runs one cell per scrape cycle, and derives
+> that cycle's `lat`/`lon`/`radius` from the cell — fields the API *does* honor. A
+> bigger `grid_cell` means a wider (less precise) search radius per cycle but fewer
+> cycles to cover the whole city. `concurrency` has no such path — the request
+> literally carries no field the API reads for it, so it is inert today; it is
+> still sent and stored per-job in case a future scraper version picks it up.
 
 ### Authentication
 
@@ -799,7 +804,7 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 | `GMAPS_DEFAULT_DEPTH` | `10` | Default scroll depth |
 | `GMAPS_DEFAULT_ZOOM` | `15` | Default Google Maps zoom level |
 | `GMAPS_DEFAULT_CONCURRENCY` | `4` | Default concurrency (stored per-job; not read by the gmaps web API today) |
-| `GMAPS_DEFAULT_GRID_CELL` | `1.0` | Default grid cell size in km (stored per-job; not read by the gmaps web API today) |
+| `GMAPS_DEFAULT_GRID_CELL` | `1.0` | Default city coverage cell size in km — overridable per job from the Maps tab's Advanced Settings. Splits the city bbox into cells; each scrape cycle covers one, so this sets the `radius` sent to the gmaps API (see below) |
 
 ### Geo / Nominatim
 

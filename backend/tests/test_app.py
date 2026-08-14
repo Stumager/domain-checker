@@ -228,6 +228,22 @@ class MapsApiTests(BaseAppTestCase):
         response = client.post("/api/maps/job/start", json={"niche": "restaurants"})
         self.assertEqual(response.status_code, 400)
 
+    def test_job_start_uses_the_requested_grid_cell_size(self):
+        """The Advanced Settings field on the Maps tab reaches the stored job."""
+        from app.services import geo_data, maps_service
+
+        client = self.create_client()
+
+        with patch.object(geo_data, "fetch_bbox", return_value=[40.3, 40.6, -3.8, -3.5]), \
+             patch.object(maps_service, "create_gmaps_job", return_value="job-1"):
+            response = client.post("/api/maps/job/start", json={
+                "niche": "restaurants", "country": "Spain", "city": "Madrid",
+                "grid_cell": 5,
+            })
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["grid_cell"], 5.0)
+
     def test_status_is_empty_before_any_job(self):
         client = self.create_client()
 

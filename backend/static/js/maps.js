@@ -196,6 +196,7 @@ export async function mapsStartJob() {
         tld_filter: (document.getElementById("mapsTldFilter")?.value || "").trim(),
         depth: parseInt(document.getElementById("mapsDepth")?.value, 10) || 10,
         zoom: parseInt(document.getElementById("mapsZoom")?.value, 10) || 15,
+        grid_cell: parseFloat(document.getElementById("mapsGridCell")?.value) || 1,
         custom_query: (document.getElementById("mapsCustomQuery")?.value || "").trim()
     };
 
