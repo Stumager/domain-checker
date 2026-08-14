@@ -66,7 +66,17 @@ def seed_admin(app):
         return
 
     email = (app.config.get("SEED_ADMIN_EMAIL") or "admin@checker.local").strip().lower()
-    password = app.config.get("SEED_ADMIN_PASSWORD") or "admin123"
+    password = app.config.get("SEED_ADMIN_PASSWORD") or ""
+
+    # Only reached when the users table is empty, so an existing deployment
+    # never trips over this. A blank value used to fall back to "admin123",
+    # which is a published default on a box that is reachable from anywhere.
+    if not password:
+        raise RuntimeError(
+            "SEED_ADMIN_PASSWORD is not set and there is no account yet. Set it "
+            "in backend/.env before the first start — the account it creates can "
+            "sign in to everything."
+        )
 
     db.execute(
         "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",

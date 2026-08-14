@@ -131,10 +131,10 @@ The whole app sits behind a session-based login (Flask session + `werkzeug.secur
 password hashing). Only `/api/auth/*` and static assets are reachable without being
 logged in — every other page and API route redirects to the login form / 401s.
 
-- On first run, a default account is seeded from `SEED_ADMIN_EMAIL` /
-  `SEED_ADMIN_PASSWORD` (defaults `admin@checker.local` / `admin123`). The email is
-  printed to the console, the password is not. **Set a real password before
-  exposing the app, and change it after your first login.**
+- On first run, an account is seeded from `SEED_ADMIN_EMAIL` /
+  `SEED_ADMIN_PASSWORD`. **`SEED_ADMIN_PASSWORD` has no default** — with an empty
+  users table and no password set, the app refuses to start rather than create a
+  known account. The email is logged, the password is not.
 - New accounts can self-register from the login screen ("Create one").
 - Registering a second account does **not** give it access to the first account's
   Maps jobs/domains/proxies (isolated per `owner_id`) — but it *does* share the same
@@ -663,7 +663,7 @@ Copy `.env.example` to `backend/.env` and adjust as needed. Everything is option
 | `CORS_ORIGINS` | _(empty)_ | Comma-separated allowed CORS origins; empty = disabled |
 | `MAX_DOMAINS` | `200000` | Max domains accepted per scan request |
 | `SEED_ADMIN_EMAIL` | `admin@checker.local` | Account created on first run if no users exist |
-| `SEED_ADMIN_PASSWORD` | `admin123` | Password for the seeded account — set a real one before exposing the app |
+| `SEED_ADMIN_PASSWORD` | — | **Required on first run.** Password for the seeded account; the app will not start without it while no users exist |
 | `MAPS_DB_PATH` | _(empty → `backend/data/maps.db`)_ | SQLite file for Maps tables + `users` |
 
 ### Scan / RDAP
@@ -821,8 +821,9 @@ does not sync between machines and is unaffected by who is signed in. Maps data
 not survive a restart — `reset_stale_jobs()` marks orphaned `running` jobs as
 `stopped` on boot, and the job has to be started again.
 
-**The seeded admin password defaults to `admin123`.** It is created on first run
-if no users exist. Set `SEED_ADMIN_PASSWORD` before exposing the app.
+**Anyone who can register gets an account.** The login screen has an open
+"Create one" form — there is no invite or approval step, so the app should not
+be exposed to the open internet without something in front of it.
 
 **No rate limiting on the auth endpoints.** `/api/auth/login` will accept
 unlimited attempts; put the app behind a reverse proxy that throttles if it is

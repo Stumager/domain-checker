@@ -34,6 +34,7 @@ class BaseAppTestCase(unittest.TestCase):
             "FINAL_CHECK_ENABLED": True,
             "DEFAULT_TLDS": "com",
             "SECRET_KEY": "test-secret",
+            "SEED_ADMIN_PASSWORD": "test-admin-password",
             "MAPS_DB_PATH": os.path.join(self._tmpdir, "maps.db"),
         }
         config.update(overrides)

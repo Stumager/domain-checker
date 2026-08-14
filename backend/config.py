@@ -162,9 +162,10 @@ class Config:
     # SQLite для модуля Maps и учётных записей. Пусто -> backend/data/maps.db
     MAPS_DB_PATH = os.getenv("MAPS_DB_PATH", "").strip()
 
-    # Учётка, создаваемая при первом запуске
+    # Учётка, создаваемая при первом запуске.
+    # Без дефолта намеренно: seed_admin() падает, если пароль не задан.
     SEED_ADMIN_EMAIL = os.getenv("SEED_ADMIN_EMAIL", "admin@checker.local").strip()
-    SEED_ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+    SEED_ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "")
 
     # Groq LLM semantic classifier for Wayback snapshots
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
