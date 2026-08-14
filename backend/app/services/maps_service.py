@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import threading
+import time
 
 from .. import db
 from ..utils import apply_config, now_iso, parse_tlds
@@ -161,6 +162,17 @@ def active_job(owner_id=None):
     return db.query_one(sql + " ORDER BY id DESC LIMIT 1", tuple(params))
 
 
+def _blocking_job(owner_id=None):
+    """Job that must finish before a new one can start: running, or still
+    winding down after Stop. See the note on 'stopping' in stop_job()."""
+    sql = "SELECT * FROM maps_jobs WHERE status IN ('running', 'stopping')"
+    params = []
+    if owner_id is not None:
+        sql += " AND owner_id = ?"
+        params.append(owner_id)
+    return db.query_one(sql + " ORDER BY id DESC LIMIT 1", tuple(params))
+
+
 def domain_count(job_id=None, owner_id=None) -> int:
     clauses, params = [], []
     if owner_id is not None:
@@ -188,8 +200,13 @@ def coverage_progress(job: dict) -> dict:
 
 
 def reset_stale_jobs():
-    """После рестарта приложения потоков поллинга нет — снимаем флаг running."""
-    db.execute("UPDATE maps_jobs SET status = 'stopped' WHERE status = 'running'")
+    """После рестарта приложения потоков поллинга нет — снимаем флаг running.
+
+    'stopping' тоже сбрасываем: без живого потока эту задачу больше некому
+    подтвердить как остановленную, иначе она бы блокировала старт новых задач
+    навсегда после каждого рестарта.
+    """
+    db.execute("UPDATE maps_jobs SET status = 'stopped' WHERE status IN ('running', 'stopping')")
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +229,14 @@ def _drop_stop_event(job_id: int):
 
 def start_job(params: dict, owner_id=1) -> dict:
     """Создать задачу, запустить её в gmaps и поднять поток поллинга."""
-    if active_job(owner_id):
+    blocking = _blocking_job(owner_id)
+    if blocking:
+        if blocking["status"] == "stopping":
+            raise GmapsError(
+                "The previous job is still stopping — the scraper only runs one "
+                "job at a time, so starting another now would queue behind it. "
+                "Wait for it to finish stopping, then start again."
+            )
         raise GmapsError("A maps job is already running")
 
     niche = (params.get("niche") or "").strip()
@@ -283,11 +307,21 @@ def start_job(params: dict, owner_id=1) -> dict:
 
 
 def stop_job(job_id=None, owner_id=1) -> dict:
+    """Signal the poll thread to stop and return immediately.
+
+    Does NOT mark the job 'stopped' here — the scraper has one worker
+    (concurrency=1 in practice), so a second job starting before this one
+    truly released it would just queue behind it, invisibly, for as long as
+    the scraper takes to notice the DELETE below (which it is not guaranteed
+    to honor immediately). Status goes to 'stopping'; the poll thread itself
+    flips it to 'stopped' once it has confirmed the scraper is done with it
+    (see the tail of _maps_poll_loop). start_job() blocks on both statuses.
+    """
     job = get_job(job_id, owner_id) if job_id else active_job(owner_id)
     if not job:
         raise GmapsError("No active maps job")
 
-    db.execute("UPDATE maps_jobs SET status = 'stopped' WHERE id = ?", (job["id"],))
+    db.execute("UPDATE maps_jobs SET status = 'stopping' WHERE id = ?", (job["id"],))
     _stop_event(job["id"]).set()
     delete_gmaps_job(job.get("gmaps_job_id") or "")
 
@@ -334,6 +368,32 @@ def _start_next_cycle(job_id: int, owner_id=None) -> str:
 def _fail_job(job_id: int):
     logger.error("Maps job %s gave up after %s consecutive failures", job_id, MAX_CONSECUTIVE_FAILURES)
     db.execute("UPDATE maps_jobs SET status = 'error' WHERE id = ?", (job_id,))
+
+
+def _confirm_scraper_released(job_id: int, gmaps_job_id: str, attempts: int = 5, wait_seconds: float = 3.0) -> bool:
+    """Best-effort wait for the scraper to actually let go of this job.
+
+    The scraper runs one job at a time; DELETE is not guaranteed to cancel
+    in-flight work immediately. Polling status until it is gone/ok/failed
+    means the NEXT job we create doesn't just queue silently behind this one.
+    Gives up after ~attempts*wait_seconds and proceeds anyway — a slow or
+    unresponsive scraper shouldn't wedge the Stop button forever.
+    """
+    if not gmaps_job_id:
+        return True
+    for _ in range(attempts):
+        try:
+            status = str(pick(get_gmaps_job(gmaps_job_id), "status") or "").strip().lower()
+        except (GmapsUnavailable, GmapsError):
+            return True  # scraper no longer knows this job — released
+        if status in ("", "ok", "failed"):
+            return True
+        time.sleep(wait_seconds)
+    logger.warning(
+        "Maps job %s: scraper still reports gmaps job %s in progress after waiting — "
+        "proceeding anyway", job_id, gmaps_job_id,
+    )
+    return False
 
 
 def _maps_poll_loop(job_id: int, gmaps_job_id: str, owner_id=None):
@@ -420,5 +480,12 @@ def _maps_poll_loop(job_id: int, gmaps_job_id: str, owner_id=None):
                 job = get_job(job_id, owner_id)
                 if not job or job["status"] != "running":
                     break
+
+        if stop_event.is_set():
+            # A user-requested stop, as opposed to _fail_job() already having
+            # set 'error' above — only then is it our job to finalize status.
+            delete_gmaps_job(current_id)
+            _confirm_scraper_released(job_id, current_id)
+            db.execute("UPDATE maps_jobs SET status = 'stopped' WHERE id = ?", (job_id,))
     finally:
         _drop_stop_event(job_id)

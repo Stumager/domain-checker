@@ -300,6 +300,9 @@
                     <div class="maps-status-item">Cycles <b id="mapsStatCycles">0</b></div>
                     <div class="maps-status-item">Domains found <b id="mapsStatDomains">0</b></div>
                     <div class="maps-status-item">Last run <b id="mapsStatTime">—</b></div>
+                    <div class="maps-status-item" id="mapsStatElapsedRow" hidden>Current cycle <b id="mapsStatElapsed">—</b>
+                        <span class="maps-help" title="A scrape cycle can legitimately take up to GMAPS_MAX_TIME (10 minutes by default) before anything else here changes. This ticks every second on its own so you can tell the job is still alive.">?</span>
+                    </div>
                 </div>
 
                 <div class="maps-coverage" id="mapsCoverage" hidden>

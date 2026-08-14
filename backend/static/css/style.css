@@ -1730,6 +1730,24 @@ button:focus-visible {
 .maps-status-item b.is-stopped { color: var(--t2); }
 .maps-status-item b.is-error   { color: var(--err); }
 
+/* A scrape cycle can run for minutes with no data change at all — this dot is
+   the only thing that moves in between, so the tab doesn't look hung. */
+.maps-status-item b.is-running::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: var(--ok);
+    animation: maps-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes maps-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .35; transform: scale(.6); }
+}
+
 /* Collapsible sections */
 .maps-collapsible {
     border: 1px solid var(--br);

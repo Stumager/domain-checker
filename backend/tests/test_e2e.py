@@ -207,6 +207,31 @@ def test_maps_tab_loads_reference_data(app_page):
     )
 
 
+def test_maps_city_field_works_before_a_country_is_picked(app_page):
+    """City used to show nothing at all until Country had a value."""
+    app_page.click(".tab-btn[data-tab='maps']")
+    app_page.wait_for_function(
+        "document.querySelectorAll('#mapsCountryOptions option').length > 200",
+        timeout=15000,
+    )
+
+    # Empty City field, no Country yet -> must not be an empty datalist.
+    assert app_page.evaluate("document.querySelectorAll('#mapsCityOptions option').length") > 0
+
+    # An unambiguous city backfills Country. (Language backfill is verified
+    # manually — under TESTING config, language warmup is skipped on purpose,
+    # so every country's `language` is "" here regardless.)
+    app_page.fill("#mapsCity", "Da Nang")
+    app_page.wait_for_function("document.getElementById('mapsCountry').value === 'Vietnam'")
+
+    # An ambiguous one (Madrid: Spain and Colombia both have one) must not guess.
+    app_page.fill("#mapsCountry", "")
+    app_page.fill("#mapsCity", "")
+    app_page.fill("#mapsCity", "Madrid")
+    app_page.wait_for_timeout(300)
+    assert app_page.input_value("#mapsCountry") == ""
+
+
 def test_sign_out_returns_to_the_login_form(app_page):
     app_page.click("[data-action='authLogout']")
     app_page.wait_for_selector("#loginForm")

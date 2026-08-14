@@ -379,6 +379,16 @@ class MapsApiTests(BaseAppTestCase):
 
 
 class MapsServiceTests(BaseAppTestCase):
+    def setUp(self):
+        super().setUp()
+        # _STOP_EVENTS is keyed by job_id in a module-level dict, and every test
+        # gets a fresh DB whose autoincrement starts back at 1 — without this,
+        # a test that sets a stop event without running _maps_poll_loop to
+        # completion (which drops it) would leak a "pre-stopped" Event into
+        # whichever later test's job happens to land on the same id.
+        from app.services import maps_service
+        maps_service._STOP_EVENTS.clear()
+
     def test_download_csv_decodes_utf8_when_server_omits_charset(self):
         from app.services import gmaps_client
 
@@ -618,6 +628,97 @@ class MapsServiceTests(BaseAppTestCase):
 
         with self.assertRaises(maps_service.GmapsError):
             maps_service.start_job({"niche": "gyms", "country": "Spain", "city": "Madrid"})
+
+    def test_stop_job_sets_stopping_not_stopped(self):
+        """The poll thread — not stop_job() — gets to decide when it's really over.
+
+        See stop_job()'s docstring: the scraper only runs one job at a time, so
+        marking the row 'stopped' before the scraper has actually released it
+        would let a second Start slip in and queue silently behind the first.
+        """
+        from app.services import maps_service
+
+        self.create_client()
+        job_id = self._insert_running_job()
+
+        with patch.object(maps_service, "delete_gmaps_job"):
+            job = maps_service.stop_job(job_id)
+
+        self.assertEqual(job["status"], "stopping")
+        self.assertEqual(maps_service.get_job(job_id)["status"], "stopping")
+
+    def test_start_job_blocks_while_previous_job_is_stopping(self):
+        from app.services import maps_service
+
+        self.create_client()
+        job_id = self._insert_running_job()
+        with patch.object(maps_service, "delete_gmaps_job"):
+            maps_service.stop_job(job_id)
+
+        with self.assertRaises(maps_service.GmapsError) as ctx:
+            maps_service.start_job({"niche": "gyms", "country": "Spain", "city": "Madrid"})
+        self.assertIn("still stopping", str(ctx.exception))
+
+    def test_poll_loop_waits_for_scraper_release_before_marking_stopped(self):
+        """The core fix: don't declare 'stopped' until the scraper agrees.
+
+        get_gmaps_job reports "working" on the first release-check and only
+        "ok" afterwards — the loop must poll past that itself before flipping
+        the DB row, proving it isn't just trusting stop_job()'s DELETE call.
+        """
+        from app.services import geo_data, maps_service
+
+        self.create_client()
+        maps_service.set_config({"GMAPS_POLL_INTERVAL": 0.01})
+        job_id = self._insert_running_job()
+
+        release_statuses = iter(["working", "ok"])
+
+        with patch.object(geo_data, "fetch_bbox", return_value=None), \
+             patch.object(maps_service, "delete_gmaps_job"), \
+             patch.object(maps_service, "time") as time_mock, \
+             patch.object(maps_service, "get_gmaps_job",
+                          side_effect=lambda _id: {"Status": next(release_statuses)}):
+            maps_service.stop_job(job_id)
+            self.assertEqual(maps_service.get_job(job_id)["status"], "stopping")
+
+            maps_service._maps_poll_loop(job_id, "g1")
+
+            # A real wait would be 3s per attempt — patched out, but it must
+            # still have been *called* between the "working" and "ok" checks.
+            time_mock.sleep.assert_called()
+
+        self.assertEqual(maps_service.get_job(job_id)["status"], "stopped")
+
+    def test_poll_loop_gives_up_waiting_and_still_marks_stopped(self):
+        """A scraper that never confirms release must not wedge Stop forever."""
+        from app.services import geo_data, maps_service
+
+        self.create_client()
+        maps_service.set_config({"GMAPS_POLL_INTERVAL": 0.01})
+        job_id = self._insert_running_job()
+
+        with patch.object(geo_data, "fetch_bbox", return_value=None), \
+             patch.object(maps_service, "delete_gmaps_job"), \
+             patch.object(maps_service, "time"), \
+             patch.object(maps_service, "get_gmaps_job", return_value={"Status": "working"}):
+            maps_service.stop_job(job_id)
+            maps_service._maps_poll_loop(job_id, "g1")
+
+        self.assertEqual(maps_service.get_job(job_id)["status"], "stopped")
+
+    def test_reset_stale_jobs_also_clears_stopping(self):
+        from app.services import maps_service
+
+        self.create_client()
+        job_id = self._insert_running_job()
+        with patch.object(maps_service, "delete_gmaps_job"):
+            maps_service.stop_job(job_id)
+        self.assertEqual(maps_service.get_job(job_id)["status"], "stopping")
+
+        maps_service.reset_stale_jobs()
+
+        self.assertEqual(maps_service.get_job(job_id)["status"], "stopped")
 
     def test_stale_running_jobs_are_reset_on_startup(self):
         from app import db

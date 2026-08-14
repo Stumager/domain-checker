@@ -6,6 +6,7 @@ const MAPS_PAGE_SIZE = 50;
 const MAPS_PROXY_PAGE_SIZE = 10;
 
 let mapsGeo = [];
+let mapsAllCities = []; // flattened {name, lat, lng, countryName} across every country, for the pre-country fallback
 let mapsNiches = [];
 let mapsSessions = [];
 let mapsInitStarted = false;
@@ -16,6 +17,8 @@ let mapsTotalPages = 0;
 let mapsNicheManual = false;
 let mapsIsRunning = false;
 let mapsLastDomainCount = -1;
+let mapsCurrentCycleStartedAt = null; // Date, from the job's last_run_at
+let mapsElapsedTimer = null;
 let mapsProxyPage = 1;
 let mapsProxyTotalPages = 0;
 let mapsProxySearchTimer = null;
@@ -62,6 +65,9 @@ export async function mapsInit() {
 
     if (!mapsStatusTimer) {
         mapsStatusTimer = setInterval(mapsStatusPoll, 10000);
+    }
+    if (!mapsElapsedTimer) {
+        mapsElapsedTimer = setInterval(mapsTickElapsed, 1000);
     }
 
     const search = document.getElementById("mapsSearch");
@@ -112,6 +118,9 @@ async function mapsLoadGeo() {
         }
 
         mapsGeo = await geoResp.json();
+        mapsAllCities = mapsGeo.flatMap(country =>
+            (country.cities || []).map(city => ({ ...city, countryName: country.name }))
+        );
         mapsNiches = nicheResp.ok ? await nicheResp.json() : [];
 
         const nicheSelect = document.getElementById("mapsNiche");
@@ -122,6 +131,7 @@ async function mapsLoadGeo() {
         }
 
         const countrySelect = document.getElementById("mapsCountry");
+        const citySelect = document.getElementById("mapsCity");
         if (countrySelect) {
             const countryOptions = document.getElementById("mapsCountryOptions");
             if (countryOptions) {
@@ -130,6 +140,9 @@ async function mapsLoadGeo() {
                     .join("");
             }
             countrySelect.addEventListener("input", mapsOnCountryChange);
+        }
+        if (citySelect) {
+            citySelect.addEventListener("input", mapsOnCityChange);
         }
 
         mapsOnCountryChange();
@@ -140,26 +153,70 @@ async function mapsLoadGeo() {
     }
 }
 
+/**
+ * Rebuild the City datalist for the job-creation form: the selected country's
+ * cities if one is picked, otherwise every bundled city (capped) so the field
+ * is usable before Country has a value.
+ */
+function mapsRefreshCityOptions(query) {
+    const countrySelect = document.getElementById("mapsCountry");
+    const country = mapsGeo.find(c => c.name === countrySelect?.value || c.code === countrySelect?.value);
+    const source = country
+        ? (country.cities || []).map(city => ({ ...city, countryName: country.name }))
+        : mapsAllCities;
+
+    const needle = (query || "").trim().toLocaleLowerCase();
+    const matches = source
+        .filter(city => !needle || city.name.toLocaleLowerCase().includes(needle))
+        .slice(0, 300);
+
+    const cityOptions = document.getElementById("mapsCityOptions");
+    if (cityOptions) {
+        cityOptions.innerHTML = matches
+            .map(city => `<option value="${escapeHtml(city.name)}"></option>`)
+            .join("");
+    }
+    return matches;
+}
+
 function mapsOnCountryChange() {
     const countrySelect = document.getElementById("mapsCountry");
     const citySelect = document.getElementById("mapsCity");
     if (!countrySelect || !citySelect) return;
 
     const country = mapsGeo.find(c => c.name === countrySelect.value || c.code === countrySelect.value);
-    const cities = (country && country.cities) || [];
-
-    const cityOptions = document.getElementById("mapsCityOptions");
-    if (cityOptions) {
-        cityOptions.innerHTML = cities
-            .map(city => `<option value="${escapeHtml(city.name)}"></option>`)
-            .join("");
-    }
+    mapsRefreshCityOptions(citySelect.value);
     if (!country) citySelect.value = "";
 
     const languageInput = document.getElementById("mapsLanguage");
     if (languageInput && country && country.language) {
         languageInput.value = country.language;
     }
+}
+
+/**
+ * Picking a city before a country (via the all-cities fallback) needs to
+ * backfill Country — otherwise mapsStartJob() rejects a visibly complete form.
+ * Only backfills when the city name is unambiguous (belongs to exactly one
+ * country in the dataset) — e.g. "Madrid" exists in both Spain and Colombia,
+ * and guessing wrong would silently send the job to the wrong place.
+ */
+function mapsOnCityChange() {
+    const cityInput = document.getElementById("mapsCity");
+    const countryInput = document.getElementById("mapsCountry");
+    if (!cityInput || !countryInput) return;
+
+    mapsRefreshCityOptions(cityInput.value);
+
+    const currentCountry = mapsGeo.find(c => c.name === countryInput.value || c.code === countryInput.value);
+    if (currentCountry) return; // already have a country — don't second-guess it
+
+    const exactMatches = mapsAllCities.filter(city => city.name === cityInput.value);
+    if (exactMatches.length !== 1) return; // none, or ambiguous across countries
+
+    countryInput.value = exactMatches[0].countryName;
+    mapsOnCountryChange();
+    cityInput.value = exactMatches[0].name;
 }
 
 export function mapsOnNicheChange() {
@@ -251,15 +308,42 @@ export async function mapsStopJob() {
 
         if (!resp.ok) {
             mapsShowError(data.error || "Could not stop the job");
+            if (stopBtn) stopBtn.disabled = false;
             return;
         }
 
-        mapsStatusPoll();
+        // Awaited on purpose: the job is now 'stopping', not 'stopped', and this
+        // poll is what sets the button's real disabled/label state from that —
+        // re-enabling it here unconditionally would let a second click race in
+        // before the scraper has actually released the job.
+        await mapsStatusPoll();
     } catch (e) {
         mapsShowError("Network error: " + e.message);
-    } finally {
         if (stopBtn) stopBtn.disabled = false;
     }
+}
+
+/**
+ * Ticks every second, independent of the 10s status poll, so something on
+ * screen visibly moves during a cycle even though the underlying numbers
+ * (cycle count, domains found) can legitimately sit still for up to
+ * GMAPS_MAX_TIME between polls.
+ */
+function mapsTickElapsed() {
+    const row = document.getElementById("mapsStatElapsedRow");
+    const el = document.getElementById("mapsStatElapsed");
+    if (!row || !el) return;
+
+    if (!mapsCurrentCycleStartedAt) {
+        row.hidden = true;
+        return;
+    }
+
+    row.hidden = false;
+    const seconds = Math.max(0, Math.floor((Date.now() - mapsCurrentCycleStartedAt.getTime()) / 1000));
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    el.textContent = `${m}m ${String(s).padStart(2, "0")}s`;
 }
 
 async function mapsStatusPoll() {
@@ -279,6 +363,10 @@ async function mapsStatusPoll() {
         const coverageMeta = document.getElementById("mapsCoverageMeta");
 
         mapsIsRunning = Boolean(job && job.status === "running");
+        // The scraper only runs one job at a time — while 'stopping', Start must
+        // stay blocked or a click here would just queue behind the old job with
+        // no visible sign anything went wrong. See stop_job()'s docstring.
+        const isStopping = Boolean(job && job.status === "stopping");
 
         if (bar) bar.classList.toggle("active", Boolean(job));
         if (coverageBox) coverageBox.hidden = !coverage?.available;
@@ -291,8 +379,12 @@ async function mapsStatusPoll() {
             const track = coverageBox?.querySelector(".maps-coverage-track");
             if (track) track.setAttribute("aria-valuenow", String(percent));
         }
-        if (startBtn) startBtn.style.display = mapsIsRunning ? "none" : "block";
-        if (stopBtn) stopBtn.style.display = mapsIsRunning ? "block" : "none";
+        if (startBtn) startBtn.style.display = (mapsIsRunning || isStopping) ? "none" : "block";
+        if (stopBtn) {
+            stopBtn.style.display = (mapsIsRunning || isStopping) ? "block" : "none";
+            stopBtn.disabled = isStopping;
+            stopBtn.textContent = isStopping ? "Stopping…" : "Stop";
+        }
 
         if (job) {
             const statusEl = document.getElementById("mapsStatStatus");
@@ -305,6 +397,9 @@ async function mapsStatusPoll() {
             document.getElementById("mapsStatTime").textContent =
                 job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—";
         }
+
+        mapsCurrentCycleStartedAt = (mapsIsRunning && job.last_run_at) ? new Date(job.last_run_at) : null;
+        mapsTickElapsed();
 
         // Refresh the table once new domains have landed
         const total = data.total_domains ?? 0;
@@ -389,6 +484,31 @@ function mapsInitGeoFilters() {
     refreshCities();
 }
 
+/**
+ * "Current session only" filters to the job that is active *right now* — the
+ * moment a new job starts, that's a brand-new, still-empty session, so the
+ * table goes blank even though nothing was deleted. Say so explicitly instead
+ * of leaving the user to wonder whether their domains are gone.
+ */
+function mapsEmptyStateHtml() {
+    const activeOnly = document.getElementById("mapsActiveOnly")?.checked;
+    if (activeOnly && mapsLastDomainCount > 0) {
+        return `<tr><td colspan="7" class="maps-empty">
+            No domains for the current session yet — ${mapsLastDomainCount.toLocaleString()}
+            total across all sessions are still there.
+            <button type="button" class="maps-row-btn" data-action="mapsShowAllSessions">Show all</button>
+        </td></tr>`;
+    }
+    return `<tr><td colspan="7" class="maps-empty">No domains yet — start a scrape to collect them.</td></tr>`;
+}
+
+/** Escape hatch out of the empty state above. */
+export function mapsShowAllSessions() {
+    const checkbox = document.getElementById("mapsActiveOnly");
+    if (checkbox) checkbox.checked = false;
+    mapsLoadDomains(1);
+}
+
 export async function mapsLoadDomains(page) {
     mapsPage = Math.max(1, page || 1);
 
@@ -425,7 +545,7 @@ export async function mapsLoadDomains(page) {
                         <td>${escapeHtml((item.discovered_at || "").replace("T", " "))}</td>
                         <td>${item.exported_at ? "Exported" : "New"}</td>
                     </tr>`).join("")
-                : `<tr><td colspan="6" class="maps-empty">No domains yet — start a scrape to collect them.</td></tr>`;
+                : mapsEmptyStateHtml();
         }
 
         const pagination = document.getElementById("mapsPagination");
