@@ -23,6 +23,8 @@ import {
     handleDrop,
     handleFileInputChange,
     openDomainFilePicker,
+    restoreDomainsInputDraft,
+    resumeCheckIfRunning,
     setDropHint,
     startCheck,
     stopCheck,
@@ -65,11 +67,30 @@ import {
     mapsToggleSection,
 } from "./maps.js";
 
+// A refresh with no memory of which tab was open always landed back on Domain
+// Checker — jarring mid-scrape, since it also masked that Maps had a live job
+// (see restoreActiveTab() below; the job itself never stopped, only the view of it).
+const ACTIVE_TAB_KEY = "activeTab";
+const KNOWN_TABS = ["checker", "domaindb", "maps"];
+
 function switchTab(tabName) {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tabName));
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + tabName));
     if (tabName === "domaindb") renderDbSidebar();
     if (tabName === "maps") mapsInit();
+    try {
+        localStorage.setItem(ACTIVE_TAB_KEY, tabName);
+    } catch (_e) {}
+}
+
+function restoreActiveTab() {
+    let saved = null;
+    try {
+        saved = localStorage.getItem(ACTIVE_TAB_KEY);
+    } catch (_e) {}
+    if (saved && KNOWN_TABS.includes(saved) && saved !== "checker") {
+        switchTab(saved);
+    }
 }
 
 // Every data-action value in index.html must have an entry here.
@@ -119,6 +140,7 @@ function bindCheckerTab() {
     const textarea = document.getElementById("domainsInput");
     if (!textarea) return;
 
+    restoreDomainsInputDraft(); // before the first updateDomainCount() reads the textarea
     textarea.addEventListener("input", updateDomainCount);
     updateDomainCount();
 
@@ -238,4 +260,10 @@ window.addEventListener("DOMContentLoaded", () => {
     bindArchiveModal();
     bindDomainDbTab();
     bindMapsTab();
+
+    // Neither the Domain Checker scan nor a Maps job stop just because the
+    // page reloaded — both are server-side daemon work. Reconnect to whatever
+    // is actually running before the user notices anything looks idle.
+    restoreActiveTab();
+    resumeCheckIfRunning();
 });

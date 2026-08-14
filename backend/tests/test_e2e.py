@@ -232,6 +232,36 @@ def test_maps_city_field_works_before_a_country_is_picked(app_page):
     assert app_page.input_value("#mapsCountry") == ""
 
 
+def test_active_tab_and_domains_draft_survive_a_reload(app_page):
+    """A refresh used to always bounce back to Domain Checker with the
+    textarea wiped, even with nothing server-side actually interrupted."""
+    app_page.fill("#domainsInput", "alpha.com\nbeta.com")
+    app_page.wait_for_timeout(500)  # past the 400ms debounce on the draft save
+    app_page.click(".tab-btn[data-tab='maps']")
+    app_page.wait_for_function(
+        "document.querySelectorAll('#mapsCountryOptions option').length > 200",
+        timeout=15000,
+    )
+
+    app_page.reload()
+    app_page.wait_for_selector(".tab-btn[data-tab='checker']")
+
+    assert app_page.evaluate(
+        "document.querySelector('.tab-btn.active')?.dataset.tab"
+    ) == "maps"
+    assert app_page.evaluate(
+        "document.querySelector('.tab-panel.active')?.id"
+    ) == "tab-maps"
+    # mapsInit() actually re-ran for the restored tab, not just the CSS class
+    app_page.wait_for_function(
+        "document.querySelectorAll('#mapsCountryOptions option').length > 200",
+        timeout=15000,
+    )
+
+    app_page.click(".tab-btn[data-tab='checker']")
+    assert app_page.input_value("#domainsInput") == "alpha.com\nbeta.com"
+
+
 def test_sign_out_returns_to_the_login_form(app_page):
     app_page.click("[data-action='authLogout']")
     app_page.wait_for_selector("#loginForm")

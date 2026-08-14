@@ -6,6 +6,21 @@ let pollInterval = null;
 let isChecking = false;
 let isStopping = false;
 
+/** Shared by a fresh Start and by resumeCheckIfRunning() picking up a scan
+ * that was already running server-side before this page load. */
+function _enterRunningUI() {
+    isChecking = true;
+    isStopping = false;
+    document.getElementById("startBtn").style.display = "none";
+    document.getElementById("stopBtn").style.display = "block";
+    document.getElementById("stopBtn").disabled = false;
+    document.getElementById("stopBtn").textContent = "Stop";
+    document.getElementById("progressSection").classList.add("active");
+    document.getElementById("resultsSection").classList.remove("active");
+    const errInfoEl = document.getElementById("rdapErrorInfo");
+    if (errInfoEl) { errInfoEl.textContent = ""; errInfoEl.className = ""; }
+}
+
 /**
  * Start domain checking process
  */
@@ -30,17 +45,7 @@ export async function startCheck() {
         return;
     }
 
-    isChecking = true;
-    isStopping = false;
-    document.getElementById("startBtn").style.display = "none";
-    document.getElementById("stopBtn").style.display = "block";
-    document.getElementById("stopBtn").disabled = false;
-    document.getElementById("stopBtn").textContent = "Stop";
-    document.getElementById("progressSection").classList.add("active");
-    document.getElementById("resultsSection").classList.remove("active");
-    // reset any previous RDAP error info
-    const errInfoEl = document.getElementById("rdapErrorInfo");
-    if (errInfoEl) { errInfoEl.textContent = ""; errInfoEl.className = ""; }
+    _enterRunningUI();
 
     try {
         const resp = await fetch("/api/check", {
@@ -67,6 +72,29 @@ export async function startCheck() {
     } catch (e) {
         alert("Error: " + e.message);
         finishCheckUI(false);
+    }
+}
+
+/**
+ * Called once on page load. A refresh does not touch the server-side scan —
+ * it is a daemon thread that keeps running regardless — so without this the
+ * UI would just show its idle default markup and look like the scan had
+ * stopped, even though it hadn't.
+ */
+export async function resumeCheckIfRunning() {
+    try {
+        const resp = await fetch("/api/status");
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.running) return;
+
+        _enterRunningUI();
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(updateStatus, 200);
+        updateStatus();
+    } catch (e) {
+        // No connection yet — the regular polling that starts on the next
+        // manual Start click is the fallback, nothing else to do here.
     }
 }
 
@@ -220,6 +248,40 @@ export function updateDomainCount() {
     if (countEl) {
         countEl.textContent = lines.length;
     }
+    _saveDomainsInputDraft();
+}
+
+// A refresh used to silently wipe out whatever was pasted/typed but not yet
+// submitted — this survives it, the same way Domain DB already survives one.
+const DOMAINS_DRAFT_KEY = "domainsInputDraft";
+let domainsDraftSaveTimer = null;
+
+/** Call once on load, before the first updateDomainCount(), or the initial
+ * empty-textarea read would immediately overwrite a real saved draft. */
+export function restoreDomainsInputDraft() {
+    const textarea = document.getElementById("domainsInput");
+    if (!textarea) return;
+    try {
+        const saved = localStorage.getItem(DOMAINS_DRAFT_KEY);
+        if (saved && !textarea.value.trim()) {
+            textarea.value = saved;
+        }
+    } catch (_e) {}
+}
+
+function _saveDomainsInputDraft() {
+    clearTimeout(domainsDraftSaveTimer);
+    domainsDraftSaveTimer = setTimeout(() => {
+        const textarea = document.getElementById("domainsInput");
+        if (!textarea) return;
+        try {
+            if (textarea.value.trim()) {
+                localStorage.setItem(DOMAINS_DRAFT_KEY, textarea.value);
+            } else {
+                localStorage.removeItem(DOMAINS_DRAFT_KEY);
+            }
+        } catch (_e) {}
+    }, 400);
 }
 
 function parseExtraTldAllowList() {
