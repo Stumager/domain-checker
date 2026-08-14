@@ -27,7 +27,12 @@ services:
     container_name: gmaps-scraper
     # ENTRYPOINT образа — сам бинарник, поэтому здесь только его аргументы.
     # Без -data-folder веб-режим (REST API на :8080) не поднимается.
-    command: ["-data-folder", "/gmapsdata", "-cache", "/gmapscache"]
+    #
+    # -c задан явно: по умолчанию это «половина ядер», а на одноядерной машине
+    # целочисленное деление даёт 0, и скрапер падает с
+    # `panic: Concurrency must be greater than 0`, уходя в бесконечный рестарт.
+    # На машине пожирнее это число можно поднять.
+    command: ["-data-folder", "/gmapsdata", "-cache", "/gmapscache", "-c", "1"]
     # The scraper API has no authentication of any kind. checker reaches it over
     # the compose network as http://gmaps-scraper:8080, so this mapping exists
     # only for local debugging and must never leave loopback.

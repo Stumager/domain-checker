@@ -268,6 +268,12 @@ in the `checker-data` volume, so it survives rebuilds.
 > authentication at all. Serve the app publicly through a reverse proxy on 80/443,
 > not by widening these mappings.
 
+> **The scraper runs with `-c 1`.** Its default concurrency is "half of CPU cores",
+> which integer-divides to `0` on a single-core host — it then panics with
+> `Concurrency must be greater than 0` and restarts forever, and the Maps tab
+> reports it as unreachable because Docker drops restarting containers from its
+> internal DNS. Raise the number on a bigger host.
+
 **Start it** (from the project root, where `docker-compose.yml` lives):
 
 ```bash
