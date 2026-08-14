@@ -229,13 +229,13 @@ python -m playwright install chromium   # once, for the browser tests
 python -m pytest -q
 ```
 
-50 tests, no outbound network calls — everything external is mocked and the
+43 tests, no outbound network calls — everything external is mocked and the
 database is a temporary SQLite file.
 
 | | |
 |---|---|
 | `tests/test_app.py` | 35 API tests: scan pipeline, auth, Maps API |
-| `tests/test_e2e.py` | 9 browser tests driving the real UI with Playwright |
+| `tests/test_e2e.py` | 8 browser tests driving the real UI with Playwright |
 
 The browser tests cover what a static check cannot: that `data-action` buttons
 reach their module, that delegated handlers survive a re-render, and that the
@@ -255,12 +255,18 @@ python -m pytest -q -m "not e2e"
 | Service | What |
 |---|---|
 | `checker` | This app, built from `backend/Dockerfile`, gunicorn on `:8080` |
-| `gmaps-scraper` | [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) in web/API mode, published on `:8090` |
+| `gmaps-scraper` | [gosom/google-maps-scraper](https://github.com/gosom/google-maps-scraper) in web/API mode, on `:8090` |
 
 `checker` reads the same `backend/.env` as a local run (`env_file`), overriding only
 what differs inside the network — notably `GMAPS_API_URL=http://gmaps-scraper:8080`,
 the scraper's *internal* port rather than the published 8090. The SQLite file lives
 in the `checker-data` volume, so it survives rebuilds.
+
+> **Both ports are bound to `127.0.0.1`.** Docker's port publishing writes its own
+> iptables rules and bypasses `ufw`, so a `0.0.0.0` mapping would be reachable from
+> the internet no matter what the firewall says — and the scraper API has no
+> authentication at all. Serve the app publicly through a reverse proxy on 80/443,
+> not by widening these mappings.
 
 **Start it** (from the project root, where `docker-compose.yml` lives):
 

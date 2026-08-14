@@ -11,8 +11,11 @@ services:
       PORT: 8080
       # Container-to-container: the scraper's own port, not the published 8090.
       GMAPS_API_URL: http://gmaps-scraper:8080
+    # Bound to loopback on purpose. Publishing a port writes its own iptables
+    # rules and bypasses ufw, so "0.0.0.0:8080" would be open to the internet
+    # regardless of the firewall. Put a reverse proxy in front for public access.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - checker-data:/app/data
     depends_on:
@@ -25,8 +28,11 @@ services:
     # ENTRYPOINT образа — сам бинарник, поэтому здесь только его аргументы.
     # Без -data-folder веб-режим (REST API на :8080) не поднимается.
     command: ["-data-folder", "/gmapsdata", "-cache", "/gmapscache"]
+    # The scraper API has no authentication of any kind. checker reaches it over
+    # the compose network as http://gmaps-scraper:8080, so this mapping exists
+    # only for local debugging and must never leave loopback.
     ports:
-      - "8090:8080"
+      - "127.0.0.1:8090:8080"
     volumes:
       - gmaps-cache:/gmapscache
       - gmaps-data:/gmapsdata
