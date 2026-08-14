@@ -238,6 +238,17 @@ export function downloadResult(type) {
 }
 
 /**
+ * Replace the textarea outright (e.g. "Send to Checker" from the Maps tab)
+ * and refresh the count that goes with it.
+ */
+export function replaceDomainsInputValue(text) {
+    const textarea = document.getElementById("domainsInput");
+    if (!textarea) return;
+    textarea.value = text;
+    updateDomainCount();
+}
+
+/**
  * Update the counter that shows how many domains are in the textarea.
  */
 export function updateDomainCount() {

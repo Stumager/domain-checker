@@ -262,6 +262,63 @@ def test_active_tab_and_domains_draft_survive_a_reload(app_page):
     assert app_page.input_value("#domainsInput") == "alpha.com\nbeta.com"
 
 
+def test_maps_copy_and_send_to_checker(app_page):
+    """Real maps_domains rows, not mocked responses — and neither action may
+    touch /api/maps/job/start or /stop, since both must work mid-scrape."""
+    from app import db
+
+    for domain in ("copytest-a.com", "copytest-b.com"):
+        db.execute(
+            "INSERT OR IGNORE INTO maps_domains "
+            "(owner_id, domain, job_id, country, city, niche, business_name, discovered_at) "
+            "VALUES (1, ?, NULL, '', '', '', '', '2026-01-01T00:00:00+00:00')",
+            (domain,),
+        )
+
+    app_page.click(".tab-btn[data-tab='maps']")
+    app_page.wait_for_function(
+        "document.querySelectorAll('#mapsCountryOptions option').length > 200",
+        timeout=15000,
+    )
+
+    # Narrow to just these two rows — the DB is shared across this module's tests.
+    app_page.fill("#mapsSearch", "copytest-")
+    app_page.wait_for_function("document.getElementById('mapsDomainsCount').textContent === '2'")
+
+    app_page.click("[data-mapstab='export']")
+    app_page.evaluate("""
+        window.__copiedText = null;
+        navigator.clipboard.writeText = (text) => { window.__copiedText = text; return Promise.resolve(); };
+    """)
+    app_page.click("[data-action='mapsCopyDomains']")
+    app_page.wait_for_function("window.__copiedText !== null")
+    copied = app_page.evaluate("window.__copiedText")
+    assert "copytest-a.com" in copied
+    assert "copytest-b.com" in copied
+
+    started_or_stopped = app_page.evaluate("""
+        () => {
+            window.__jobEndpointTouched = false;
+            const orig = window.fetch;
+            window.fetch = (url, opts) => {
+                if (typeof url === "string" && (url.includes("/api/maps/job/start") || url.includes("/api/maps/job/stop"))) {
+                    window.__jobEndpointTouched = true;
+                }
+                return orig(url, opts);
+            };
+            return false;
+        }
+    """)
+
+    app_page.click("[data-action='mapsSendToChecker']")
+    app_page.wait_for_function("document.querySelector('.tab-btn.active')?.dataset.tab === 'checker'")
+
+    value = app_page.input_value("#domainsInput")
+    assert "copytest-a.com" in value
+    assert "copytest-b.com" in value
+    assert app_page.evaluate("window.__jobEndpointTouched") is False
+
+
 def test_sign_out_returns_to_the_login_form(app_page):
     app_page.click("[data-action='authLogout']")
     app_page.wait_for_selector("#loginForm")

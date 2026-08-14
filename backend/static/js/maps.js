@@ -591,6 +591,59 @@ export function mapsExportCsv() {
     window.location = "/api/maps/domains/export?" + params.toString();
 }
 
+const MAPS_DOMAIN_FETCH_CAP = 5000;
+
+/**
+ * Every domain matching the current filter, paged through /api/maps/domains
+ * (NOT /export — that endpoint marks rows exported as a side effect, and
+ * neither Copy nor Send-to-Checker should count as "downloaded"). Capped so
+ * a huge unfiltered result set can't turn one click into thousands of
+ * requests or a multi-megabyte clipboard payload.
+ */
+async function mapsFetchAllFilteredDomains(cap = MAPS_DOMAIN_FETCH_CAP) {
+    const perPage = 500;
+    const domains = [];
+    let page = 1;
+    let totalPages = 1;
+
+    while (page <= totalPages && domains.length < cap) {
+        const params = mapsFilterParams();
+        params.set("page", page);
+        params.set("limit", perPage);
+        const resp = await fetch("/api/maps/domains?" + params.toString());
+        if (!resp.ok) break;
+        const data = await resp.json();
+        totalPages = data.pages || 1;
+        (data.items || []).forEach(item => domains.push(item.domain));
+        page += 1;
+    }
+
+    return { domains: domains.slice(0, cap), truncated: domains.length > cap };
+}
+
+export async function mapsCopyDomains() {
+    const { domains, truncated } = await mapsFetchAllFilteredDomains();
+    if (!domains.length) {
+        showToast("No domains match the current filter", "warn");
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(domains.join("\n"));
+        showToast(
+            `Copied ${domains.length.toLocaleString()} domain(s)` +
+            (truncated ? ` (capped at ${MAPS_DOMAIN_FETCH_CAP.toLocaleString()})` : "")
+        );
+    } catch (e) {
+        showToast("Copy failed — the browser blocked clipboard access", "error");
+    }
+}
+
+/** Used by main.js's mapsSendToChecker(), which owns the actual tab switch —
+ * see that file's header comment on why cross-module wiring lives there. */
+export async function mapsFetchDomainsForChecker() {
+    return mapsFetchAllFilteredDomains();
+}
+
 export async function mapsLoadProxies(page) {
     mapsProxyPage = Math.max(1, page || mapsProxyPage);
     try {
