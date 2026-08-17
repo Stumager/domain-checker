@@ -319,6 +319,47 @@ def test_maps_copy_and_send_to_checker(app_page):
     assert app_page.evaluate("window.__jobEndpointTouched") is False
 
 
+def test_admin_tab_creates_reveals_and_deletes_an_account(app_page):
+    """The seeded account is the sole admin, so the tab must be visible to it,
+    the generated password must round-trip into the login form, and the new
+    account must disappear from the table (and no longer be able to log in)
+    once deleted."""
+    app_page.click(".tab-btn[data-tab='admin']")
+    app_page.wait_for_selector("#adminUsersTbody tr")
+
+    app_page.fill("#adminNewEmail", "e2e-member@example.com")
+    app_page.click("[data-action='adminCreateUser']")
+
+    app_page.wait_for_selector("#adminPasswordModal.active")
+    assert app_page.input_value("#adminModalEmail") == "e2e-member@example.com"
+    password = app_page.input_value("#adminModalPassword")
+    assert len(password) == 14
+
+    app_page.click("[data-action='adminCloseModal']")
+    app_page.wait_for_function(
+        "!document.getElementById('adminPasswordModal').classList.contains('active')")
+    app_page.wait_for_function(
+        "document.getElementById('adminUsersTbody').textContent.includes('e2e-member@example.com')")
+
+    # The generated password actually works — checked over a browser context
+    # with no cookies, since app_page's context already carries the admin's
+    # session and would otherwise mask a login that never really happened.
+    other_context = app_page.context.browser.new_context()
+    other_page = other_context.new_page()
+    other_page.goto(app_page.url)
+    other_page.fill("#loginEmail", "e2e-member@example.com")
+    other_page.fill("#loginPassword", password)
+    other_page.click("#loginSubmit")
+    other_page.wait_for_selector(".tab-btn[data-tab='checker']")
+    assert other_page.query_selector(".tab-btn[data-tab='admin']") is None
+    other_context.close()
+
+    app_page.on("dialog", lambda dialog: dialog.accept())
+    app_page.click("#adminUsersTbody tr:has-text('e2e-member@example.com') [data-delete-user]")
+    app_page.wait_for_function(
+        "!document.getElementById('adminUsersTbody').textContent.includes('e2e-member@example.com')")
+
+
 def test_sign_out_returns_to_the_login_form(app_page):
     app_page.click("[data-action='authLogout']")
     app_page.wait_for_selector("#loginForm")

@@ -18,7 +18,6 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 PUBLIC_ENDPOINTS = {"static"}
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-MIN_PASSWORD_LENGTH = 6
 
 
 def current_user():
@@ -26,11 +25,16 @@ def current_user():
     if not user_id:
         return None
 
-    return db.query_one("SELECT id, email, created_at FROM users WHERE id = ?", (user_id,))
+    return db.query_one("SELECT id, email, role, created_at FROM users WHERE id = ?", (user_id,))
 
 
 def is_authenticated() -> bool:
     return current_user() is not None
+
+
+def is_admin() -> bool:
+    user = current_user()
+    return bool(user) and user.get("role") == "admin"
 
 
 def _unauthenticated():
@@ -51,6 +55,20 @@ def login_required(view):
     return wrapper
 
 
+def admin_required(view):
+    """Требовать роль admin. login_required уже отработал в before_request,
+    так что здесь достаточно проверить только роль."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not is_authenticated():
+            return _unauthenticated()
+        if not is_admin():
+            return jsonify({"error": "Admin access required"}), 403
+        return view(*args, **kwargs)
+
+    return wrapper
+
+
 def _is_public_request() -> bool:
     if request.method == "OPTIONS":
         return True
@@ -59,8 +77,17 @@ def _is_public_request() -> bool:
     return request.path.startswith("/api/auth/")
 
 
+def create_user(email: str, password: str, role: str = "user") -> dict:
+    """Вставить учётку. Общий код для seed_admin() и админ-панели."""
+    user_id = db.execute(
+        "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
+        (email, generate_password_hash(password), role, now_iso()),
+    )
+    return {"id": user_id, "email": email, "role": role}
+
+
 def seed_admin(app):
-    """Создать учётку по умолчанию при первом запуске."""
+    """Создать учётку-администратора по умолчанию при первом запуске."""
     row = db.query_one("SELECT COUNT(*) AS n FROM users")
     if row and int(row["n"]) > 0:
         return
@@ -78,15 +105,12 @@ def seed_admin(app):
             "sign in to everything."
         )
 
-    db.execute(
-        "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-        (email, generate_password_hash(password), now_iso()),
-    )
+    create_user(email, password, role="admin")
 
     # The password is deliberately not logged.
     logger.warning(
-        "Seeded the default account %s from SEED_ADMIN_PASSWORD. Change this "
-        "password after the first login.", email,
+        "Seeded the default admin account %s from SEED_ADMIN_PASSWORD. Change "
+        "this password after the first login.", email,
     )
 
 
@@ -107,41 +131,18 @@ def register_auth(app):
 # API
 # ---------------------------------------------------------------------------
 
-@auth_bp.route("/register", methods=["POST"])
-def register():
-    data = request.json or {}
-    email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
-
-    if not EMAIL_RE.match(email):
-        return jsonify({"error": "Invalid email"}), 400
-    if len(password) < MIN_PASSWORD_LENGTH:
-        return jsonify({"error": f"Password must be at least {MIN_PASSWORD_LENGTH} characters"}), 400
-
-    if db.query_one("SELECT id FROM users WHERE email = ?", (email,)):
-        return jsonify({"error": "This email is already registered"}), 409
-
-    user_id = db.execute(
-        "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-        (email, generate_password_hash(password), now_iso()),
-    )
-    session["user_id"] = user_id
-
-    return jsonify({"id": user_id, "email": email}), 201
-
-
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.json or {}
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
-    user = db.query_one("SELECT id, email, password_hash FROM users WHERE email = ?", (email,))
+    user = db.query_one("SELECT id, email, role, password_hash FROM users WHERE email = ?", (email,))
     if not user or not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Invalid email or password"}), 401
 
     session["user_id"] = user["id"]
-    return jsonify({"id": user["id"], "email": user["email"]})
+    return jsonify({"id": user["id"], "email": user["email"], "role": user["role"]})
 
 
 @auth_bp.route("/logout", methods=["POST"])

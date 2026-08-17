@@ -1828,6 +1828,9 @@ button:focus-visible {
 .status-badge.failed  { background: var(--err-subtle); color: var(--err); }
 .status-badge.unknown { background: var(--s3);         color: var(--t2); }
 
+.status-badge.role-admin { background: var(--ok-subtle); color: var(--ok); }
+.status-badge.role-user  { background: var(--s3);        color: var(--t2); }
+
 .maps-row-btn {
     background: transparent;
     border: 1px solid var(--br);

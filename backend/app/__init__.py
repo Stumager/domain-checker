@@ -91,8 +91,10 @@ def create_app(config=None):
 
     from .auth import register_auth
     from .maps_routes import maps_bp
+    from .admin import admin_bp
 
     app.register_blueprint(maps_bp)
+    app.register_blueprint(admin_bp)
     register_auth(app)
 
     return app

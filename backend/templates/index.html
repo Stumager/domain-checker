@@ -23,6 +23,9 @@
                 <span class="tab-db-count" id="tabDbCount"></span>
             </button>
             <button type="button" class="tab-btn" data-tab="maps">Maps</button>
+            {% if user and user.role == "admin" %}
+            <button type="button" class="tab-btn" data-tab="admin">Admin</button>
+            {% endif %}
         </div>
 
         <!-- Tab: Domain Checker -->
@@ -445,7 +448,75 @@
             </div>
         </div>
 
+        {% if user and user.role == "admin" %}
+        <!-- Tab: Admin -->
+        <div class="tab-panel" id="tab-admin">
+            <div class="content">
+
+                <div class="info">
+                    Passwords are generated automatically and shown once, right after creating or resetting an account — copy them before closing that dialog.
+                </div>
+
+                <div class="maps-grid">
+                    <div class="form-group">
+                        <label for="adminNewEmail">Email</label>
+                        <input type="text" id="adminNewEmail" placeholder="name@company.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="adminNewRole">Role</label>
+                        <select id="adminNewRole">
+                            <option value="user" selected>User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="maps-proxy-actions">
+                    <button type="button" class="btn-primary" data-action="adminCreateUser">Create account</button>
+                </div>
+
+                <div class="maps-proxy-table-wrap" style="margin-top:18px">
+                    <table class="archive-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTbody"></tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+        {% endif %}
+
     </div><!-- .container -->
+
+    {% if user and user.role == "admin" %}
+    <!-- Admin: one-time password reveal -->
+    <div class="modal-overlay" id="adminPasswordModal">
+        <div class="modal-content" style="max-width:420px">
+            <div class="modal-header">
+                <h2>New password</h2>
+                <button type="button" class="modal-close-btn" data-action="adminCloseModal" >x</button>
+            </div>
+            <div class="modal-body">
+                <p class="input-hint" style="margin-bottom:10px">Shown once — copy it now, it can't be viewed again after you close this.</p>
+                <div class="form-group">
+                    <label for="adminModalEmail">Email</label>
+                    <input type="text" id="adminModalEmail" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="adminModalPassword">Password</label>
+                    <input type="text" id="adminModalPassword" readonly>
+                </div>
+                <button type="button" class="btn-indigo" data-action="adminCopyPassword">Copy password</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Archive Modal -->
     <div class="modal-overlay" id="archiveModal">

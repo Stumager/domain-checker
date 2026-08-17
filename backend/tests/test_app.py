@@ -172,17 +172,110 @@ class AuthTests(BaseAppTestCase):
         })
         self.assertEqual(response.status_code, 401)
 
-    def test_register_validates_and_rejects_duplicates(self):
-        app, client = self.create_app_and_client(login=False)
+    def test_no_public_registration_endpoint(self):
+        """Accounts are admin-created only — see AdminApiTests."""
+        client = self.create_client(login=False)
+        response = client.post("/api/auth/register", json={
+            "email": "new@example.com", "password": "secret1"})
+        self.assertEqual(response.status_code, 404)
 
-        self.assertEqual(client.post("/api/auth/register", json={
-            "email": "bad", "password": "secret1"}).status_code, 400)
-        self.assertEqual(client.post("/api/auth/register", json={
-            "email": "new@example.com", "password": "123"}).status_code, 400)
-        self.assertEqual(client.post("/api/auth/register", json={
-            "email": "new@example.com", "password": "secret1"}).status_code, 201)
-        self.assertEqual(client.post("/api/auth/register", json={
-            "email": "new@example.com", "password": "secret1"}).status_code, 409)
+    def test_seeded_admin_has_admin_role(self):
+        app, client = self.create_app_and_client()
+        self.assertEqual(client.get("/api/auth/me").get_json()["role"], "admin")
+
+
+class AdminApiTests(BaseAppTestCase):
+    def login_as(self, app, email, password):
+        client = app.test_client()
+        response = client.post("/api/auth/login", json={"email": email, "password": password})
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        return client
+
+    def test_non_admin_gets_403(self):
+        app, admin = self.create_app_and_client()
+        created = admin.post("/api/admin/users", json={"email": "member@example.com", "role": "user"})
+        member = self.login_as(app, "member@example.com", created.get_json()["password"])
+
+        self.assertEqual(member.get("/api/admin/users").status_code, 403)
+        self.assertEqual(
+            member.post("/api/admin/users", json={"email": "x@example.com"}).status_code, 403)
+
+    def test_create_user_validates_email_and_role(self):
+        client = self.create_client()
+
+        self.assertEqual(client.post("/api/admin/users", json={
+            "email": "bad", "role": "user"}).status_code, 400)
+        self.assertEqual(client.post("/api/admin/users", json={
+            "email": "new@example.com", "role": "superuser"}).status_code, 400)
+
+    def test_create_user_returns_password_once_and_rejects_duplicates(self):
+        client = self.create_client()
+
+        created = client.post("/api/admin/users", json={"email": "new@example.com", "role": "user"})
+        self.assertEqual(created.status_code, 201)
+        payload = created.get_json()
+        self.assertEqual(payload["email"], "new@example.com")
+        self.assertEqual(payload["role"], "user")
+        self.assertEqual(len(payload["password"]), 14)
+
+        dup = client.post("/api/admin/users", json={"email": "new@example.com", "role": "user"})
+        self.assertEqual(dup.status_code, 409)
+
+        listed = client.get("/api/admin/users").get_json()
+        self.assertNotIn("password", listed[-1])
+
+    def test_reset_password_issues_a_new_working_password(self):
+        app, admin = self.create_app_and_client()
+        created = admin.post("/api/admin/users", json={"email": "member@example.com", "role": "user"})
+        user_id = created.get_json()["id"]
+        old_password = created.get_json()["password"]
+
+        reset = admin.post(f"/api/admin/users/{user_id}/reset-password")
+        self.assertEqual(reset.status_code, 200)
+        new_password = reset.get_json()["password"]
+        self.assertNotEqual(new_password, old_password)
+
+        self.assertEqual(app.test_client().post("/api/auth/login", json={
+            "email": "member@example.com", "password": old_password}).status_code, 401)
+        self.assertEqual(app.test_client().post("/api/auth/login", json={
+            "email": "member@example.com", "password": new_password}).status_code, 200)
+
+    def test_change_role_promotes_and_demotes(self):
+        app, admin = self.create_app_and_client()
+        created = admin.post("/api/admin/users", json={"email": "member@example.com", "role": "user"})
+        user_id = created.get_json()["id"]
+
+        promoted = admin.patch(f"/api/admin/users/{user_id}/role", json={"role": "admin"})
+        self.assertEqual(promoted.status_code, 200)
+        self.assertEqual(promoted.get_json()["role"], "admin")
+
+        demoted = admin.patch(f"/api/admin/users/{user_id}/role", json={"role": "user"})
+        self.assertEqual(demoted.status_code, 200)
+
+    def test_cannot_demote_or_delete_the_last_admin(self):
+        app, admin = self.create_app_and_client()
+        me = admin.get("/api/auth/me").get_json()["id"]
+
+        self.assertEqual(
+            admin.patch(f"/api/admin/users/{me}/role", json={"role": "user"}).status_code, 409)
+        self.assertEqual(admin.delete(f"/api/admin/users/{me}").status_code, 409)
+
+    def test_admin_cannot_delete_own_account_even_with_another_admin_present(self):
+        app, admin = self.create_app_and_client()
+        me = admin.get("/api/auth/me").get_json()["id"]
+        admin.post("/api/admin/users", json={"email": "second-admin@example.com", "role": "admin"})
+
+        self.assertEqual(admin.delete(f"/api/admin/users/{me}").status_code, 409)
+
+    def test_delete_user_removes_the_account(self):
+        app, admin = self.create_app_and_client()
+        created = admin.post("/api/admin/users", json={"email": "member@example.com", "role": "user"})
+        user_id = created.get_json()["id"]
+
+        self.assertEqual(admin.delete(f"/api/admin/users/{user_id}").status_code, 200)
+        self.assertEqual(admin.delete(f"/api/admin/users/{user_id}").status_code, 404)
+        emails = [u["email"] for u in admin.get("/api/admin/users").get_json()]
+        self.assertNotIn("member@example.com", emails)
 
 
 class MapsApiTests(BaseAppTestCase):
@@ -350,11 +443,16 @@ class MapsApiTests(BaseAppTestCase):
                 "VALUES (1, 'admin-only.es', 'Spain', 'Madrid', '')"
             )
 
-        other = app.test_client()
-        response = other.post("/api/auth/register", json={
-            "email": "maps-other@example.com", "password": "secret1"
+        created = admin.post("/api/admin/users", json={
+            "email": "maps-other@example.com", "role": "user"
         })
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(created.status_code, 201)
+
+        other = app.test_client()
+        login = other.post("/api/auth/login", json={
+            "email": "maps-other@example.com", "password": created.get_json()["password"]
+        })
+        self.assertEqual(login.status_code, 200)
         self.assertEqual(other.get("/api/maps/domains?export_status=all").get_json()["total"], 0)
         self.assertEqual(admin.get("/api/maps/domains?export_status=all").get_json()["total"], 1)
 

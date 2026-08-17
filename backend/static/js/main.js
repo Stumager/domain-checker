@@ -6,6 +6,13 @@
  * keeps working for markup rendered after load.
  */
 
+import {
+    adminCloseModal,
+    adminCopyPassword,
+    adminCreateUser,
+    adminInit,
+    bindAdminTab,
+} from "./admin.js";
 import { authLogout } from "./auth.js";
 import { showToast } from "./shared.js";
 import {
@@ -75,13 +82,14 @@ import {
 // Checker — jarring mid-scrape, since it also masked that Maps had a live job
 // (see restoreActiveTab() below; the job itself never stopped, only the view of it).
 const ACTIVE_TAB_KEY = "activeTab";
-const KNOWN_TABS = ["checker", "domaindb", "maps"];
+const KNOWN_TABS = ["checker", "domaindb", "maps", "admin"];
 
 function switchTab(tabName) {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tabName));
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + tabName));
     if (tabName === "domaindb") renderDbSidebar();
     if (tabName === "maps") mapsInit();
+    if (tabName === "admin") adminInit();
     try {
         localStorage.setItem(ACTIVE_TAB_KEY, tabName);
     } catch (_e) {}
@@ -117,6 +125,9 @@ async function mapsSendToChecker() {
 // Every data-action value in index.html must have an entry here.
 const ACTIONS = {
     authLogout,
+    adminCreateUser,
+    adminCloseModal,
+    adminCopyPassword,
     startCheck,
     stopCheck,
     toggleArchiveModal,
@@ -283,6 +294,7 @@ window.addEventListener("DOMContentLoaded", () => {
     bindArchiveModal();
     bindDomainDbTab();
     bindMapsTab();
+    bindAdminTab();
 
     // Neither the Domain Checker scan nor a Maps job stop just because the
     // page reloaded — both are server-side daemon work. Reconnect to whatever

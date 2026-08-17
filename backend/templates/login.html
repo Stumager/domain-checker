@@ -31,39 +31,16 @@
         </form>
 
         <div class="login-toggle">
-            <span id="loginToggleText">No account yet?</span>
-            <button type="button" class="login-link" id="loginToggleBtn">Create one</button>
+            <span>No account? Ask an admin to create one for you.</span>
         </div>
     </div>
 
     <script>
-        let loginMode = "login";
-
-        function setLoginMode(mode) {
-            loginMode = mode;
-            const isLogin = mode === "login";
-            document.getElementById("loginSubtitle").textContent =
-                isLogin ? "Sign in to continue" : "Create an account";
-            document.getElementById("loginSubmit").textContent =
-                isLogin ? "Sign in" : "Create account";
-            document.getElementById("loginToggleText").textContent =
-                isLogin ? "No account yet?" : "Already have an account?";
-            document.getElementById("loginToggleBtn").textContent =
-                isLogin ? "Create one" : "Sign in";
-            document.getElementById("loginPassword").setAttribute(
-                "autocomplete", isLogin ? "current-password" : "new-password");
-            showLoginError("");
-        }
-
         function showLoginError(message) {
             const el = document.getElementById("loginError");
             el.textContent = message || "";
             el.classList.toggle("active", Boolean(message));
         }
-
-        document.getElementById("loginToggleBtn").addEventListener("click", () => {
-            setLoginMode(loginMode === "login" ? "register" : "login");
-        });
 
         document.getElementById("loginForm").addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -80,7 +57,7 @@
             showLoginError("");
 
             try {
-                const resp = await fetch("/api/auth/" + loginMode, {
+                const resp = await fetch("/api/auth/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ email, password })

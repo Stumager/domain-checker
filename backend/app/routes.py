@@ -29,6 +29,7 @@ from .archive.spam_detector import (
     _detect_topic_shifts,
     _enrich_spam_flags,
 )
+from .auth import current_user
 from .check_pipeline import run_check
 from .models import CheckerState
 from .services import expand_domains
@@ -55,7 +56,7 @@ def get_checker_state() -> CheckerState:
 
 @web_bp.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", user=current_user())
 
 
 # ---------------------------------------------------------------------------

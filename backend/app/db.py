@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     email         TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'user',
     created_at    TEXT NOT NULL DEFAULT ''
 );
 
@@ -191,6 +192,14 @@ def init_db():
             columns = {row[1] for row in conn.execute("PRAGMA table_info(maps_domain_sessions)")}
             if "owner_id" not in columns:
                 conn.execute("ALTER TABLE maps_domain_sessions ADD COLUMN owner_id INTEGER NOT NULL DEFAULT 1")
+            user_columns = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+            if "role" not in user_columns:
+                conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+                # The account that existed before roles did was the de facto admin —
+                # make that explicit instead of locking everyone out of the panel.
+                oldest_user = conn.execute("SELECT id FROM users ORDER BY id LIMIT 1").fetchone()
+                if oldest_user:
+                    conn.execute("UPDATE users SET role = 'admin' WHERE id = ?", (oldest_user[0],))
             first_user = conn.execute("SELECT id FROM users ORDER BY id LIMIT 1").fetchone()
             if first_user:
                 legacy_owner = int(first_user[0])
