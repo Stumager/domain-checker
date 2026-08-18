@@ -33,6 +33,9 @@ services:
     # `panic: Concurrency must be greater than 0`, уходя в бесконечный рестарт.
     # На машине пожирнее это число можно поднять.
     command: ["-data-folder", "/gmapsdata", "-cache", "/gmapscache", "-c", "1"]
+    # Docker даёт /dev/shm всего 64MB по умолчанию — Chromium в headless-режиме
+    # столько не хватает и падает с "target closed" почти сразу после старта.
+    shm_size: "1gb"
     # The scraper API has no authentication of any kind. checker reaches it over
     # the compose network as http://gmaps-scraper:8080, so this mapping exists
     # only for local debugging and must never leave loopback.
