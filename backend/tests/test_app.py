@@ -17,6 +17,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app import create_app  # noqa: E402
 import app.check_pipeline as check_pipeline  # noqa: E402
+import app.models as models  # noqa: E402
 import app.routes as routes  # noqa: E402
 
 
@@ -26,6 +27,11 @@ class BaseAppTestCase(unittest.TestCase):
     def setUp(self):
         self._tmpdir = tempfile.mkdtemp(prefix="checker-test-")
         self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
+        # _CHECKER_STATES is a module-level registry keyed by owner_id, so it
+        # outlives any single create_app() call — without this, a leftover
+        # "running" state from a previous test's owner_id=1 would make this
+        # test's begin_run() fail with a false "scan already in progress".
+        models._CHECKER_STATES.clear()
 
     def create_app_and_client(self, login=True, **overrides):
         config = {
@@ -93,6 +99,42 @@ class CheckerAppTests(BaseAppTestCase):
 
             release.set()
             self.wait_for_terminal_state(client)
+
+    def test_checker_state_is_isolated_between_accounts(self):
+        """Two accounts scanning at once must not see or block each other —
+        the real bug this covers: one account's scan looked like it belonged
+        to everyone, and a second account got a false 409 starting their own."""
+        app, admin = self.create_app_and_client()
+        created = admin.post("/api/admin/users", json={"email": "member@example.com", "role": "user"})
+        member = app.test_client()
+        login = member.post("/api/auth/login", json={
+            "email": "member@example.com", "password": created.get_json()["password"]
+        })
+        self.assertEqual(login.status_code, 200)
+
+        entered = Event()
+        release = Event()
+
+        def blocking_run_check(state, *args, **kwargs):
+            entered.set()
+            release.wait(1.5)
+            state.finish(stage="done", message="Done!")
+
+        with patch.object(routes, "run_check", side_effect=blocking_run_check):
+            start = admin.post("/api/check", json={"domains": "example.com", "threads": 1})
+            self.assertEqual(start.status_code, 200)
+            self.assertTrue(entered.wait(1.0))
+
+            # The other account must see its own idle state, not the admin's running scan.
+            self.assertFalse(member.get("/api/status").get_json()["running"])
+
+            # ...and must be able to start its own scan instead of a false 409.
+            member_start = member.post("/api/check", json={"domains": "example.org", "threads": 1})
+            self.assertEqual(member_start.status_code, 200)
+
+            release.set()
+            self.wait_for_terminal_state(admin)
+            self.wait_for_terminal_state(member)
 
     def test_stop_endpoint_stops_running_scan(self):
         client = self.create_client(FINAL_CHECK_ENABLED=False)

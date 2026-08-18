@@ -2,11 +2,12 @@
 
     gunicorn -w 1 --threads 8 -b 0.0.0.0:8080 wsgi:app
 
-**One worker only.** Scan progress lives in `app.checker_state` and the Maps
-job pollers are daemon threads — both are per-process. A second worker would
-answer /api/status without knowing about the scan the first worker is running,
-so progress would appear to jump around or reset. Scale with --threads, not
-with -w, until that state moves out of process memory.
+**One worker only.** Scan progress lives in an in-memory per-account registry
+(app/models.py's checker_state_for_owner) and the Maps job pollers are daemon
+threads — both are per-process. A second worker would answer /api/status
+without knowing about the scan the first worker is running, so progress would
+appear to jump around or reset. Scale with --threads, not with -w, until that
+state moves out of process memory.
 """
 
 import os

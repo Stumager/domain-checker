@@ -9,7 +9,6 @@ from config import Config as DefaultConfig
 
 from . import services
 from .logging_setup import configure_logging
-from .models import CheckerState
 from .utils import split_list
 
 
@@ -49,8 +48,6 @@ def create_app(config=None):
     cors_origins = split_list(app.config.get("CORS_ORIGINS", ""))
     if cors_origins:
         CORS(app, resources={r"/api/*": {"origins": cors_origins}})
-
-    app.checker_state = CheckerState()
 
     rdap_config = {
         "RDAP_BOOTSTRAP_URL": app.config.get("RDAP_BOOTSTRAP_URL"),

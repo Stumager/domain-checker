@@ -31,7 +31,7 @@ from .archive.spam_detector import (
 )
 from .auth import current_user
 from .check_pipeline import run_check
-from .models import CheckerState
+from .models import CheckerState, checker_state_for_owner
 from .services import expand_domains
 from .services.rdap_service import load_rdap_bootstrap
 from .utils import (
@@ -47,7 +47,7 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 
 def get_checker_state() -> CheckerState:
-    return current_app.checker_state
+    return checker_state_for_owner(current_user()["id"])
 
 
 # ---------------------------------------------------------------------------

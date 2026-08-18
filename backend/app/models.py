@@ -3,6 +3,9 @@
 import threading
 from typing import List
 
+_REGISTRY_LOCK = threading.Lock()
+_CHECKER_STATES = {}
+
 
 class CheckerState:
     """Manage the state of the current domain checking job."""
@@ -103,3 +106,14 @@ class CheckerState:
         """Reset state to its initial values."""
         with self.lock:
             self._reset_locked()
+
+
+def checker_state_for_owner(owner_id: int) -> CheckerState:
+    """Each account gets its own scan state — mirrors how maps_service.py
+    scopes jobs by owner_id, so two accounts scanning at once don't collide."""
+    with _REGISTRY_LOCK:
+        state = _CHECKER_STATES.get(owner_id)
+        if state is None:
+            state = CheckerState()
+            _CHECKER_STATES[owner_id] = state
+        return state
